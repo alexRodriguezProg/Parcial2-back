@@ -5,7 +5,7 @@ from app.schemas.schemas import (
     IngredienteCreate, IngredienteUpdate, IngredienteResponse, AddIngredienteRequest,
 )
 from app.services.producto_service import ProductoService, IngredienteService
-from app.dependencies import AdminUser, AdminOrStock
+from app.core.dependencies import AdminUser, AdminOrStock
 
 ingredientes_router = APIRouter(prefix="/api/v1/ingredientes", tags=["ingredientes"])
 productos_router = APIRouter(prefix="/api/v1/productos", tags=["productos"])

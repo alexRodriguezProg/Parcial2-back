@@ -1,5 +1,5 @@
 from sqlmodel import Session, select
-from app.database import engine, create_db_and_tables
+from app.core.database import engine, create_db_and_tables
 from app.models import (
     Rol, RolCodigo, EstadoPedido, EstadoPedidoCodigo,
     FormaPago, FormaPagoCodigo, Usuario, UsuarioRol,
@@ -72,7 +72,7 @@ def seed_categorias(session):
     ]:
         existing = session.exec(select(Categoria).where(Categoria.nombre == data["nombre"])).first()
         if not existing:
-            cat = Categoria(**data)
+            cat = Categoria(**data) # type: ignore
             session.add(cat)
             session.flush()
             cats[data["nombre"]] = cat.id

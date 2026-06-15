@@ -1,7 +1,7 @@
 from typing import Annotated, Optional
 from fastapi import APIRouter, Query, HTTPException, status
 from app.schemas.schemas import UsuarioResponse, UsuarioUpdateRequest, AsignarRolRequest
-from app.dependencies import AdminUser
+from app.core.dependencies import AdminUser
 from app.repositories import UsuarioRepository, UnitOfWork
 from app.models import RolCodigo
 
@@ -13,7 +13,7 @@ def list_usuarios(_: AdminUser, skip: Annotated[int, Query(ge=0)] = 0, limit: An
     with UnitOfWork() as uow:
         repo = UsuarioRepository(uow.session)
         usuarios, total = repo.get_all_paginated(skip=skip, limit=limit, rol_codigo=rol_codigo)
-        for u in usuarios: _ = u.roles
+        for u in usuarios: _ = u.roles # type: ignore
         return {"total": total, "skip": skip, "limit": limit, "items": [UsuarioResponse.model_validate(u).model_dump() for u in usuarios]}
 
 
@@ -32,7 +32,7 @@ def update_usuario(usuario_id: int, data: UsuarioUpdateRequest, _: AdminUser):
         usuario = repo.get_with_roles(usuario_id)
         if not usuario: raise HTTPException(status_code=404, detail="Usuario no encontrado")
         usuario = repo.update(usuario, data.model_dump(exclude_unset=True))
-        _ = usuario.roles
+        _ = usuario.roles # type: ignore
         return UsuarioResponse.model_validate(usuario)
 
 
@@ -53,9 +53,9 @@ def asignar_rol(usuario_id: int, data: AsignarRolRequest, _: AdminUser):
         if not usuario: raise HTTPException(status_code=404, detail="Usuario no encontrado")
         rol = repo.get_rol_by_codigo(data.rol_codigo)
         if not rol: raise HTTPException(status_code=404, detail="Rol no encontrado")
-        repo.assign_role(usuario_id, rol.id)
+        repo.assign_role(usuario_id, rol.id) # type: ignore
         uow.session.refresh(usuario)
-        _ = usuario.roles
+        _ = usuario.roles # type: ignore
         return UsuarioResponse.model_validate(usuario)
 
 
@@ -67,9 +67,9 @@ def remover_rol(usuario_id: int, rol_codigo: RolCodigo, _: AdminUser):
         if not usuario: raise HTTPException(status_code=404, detail="Usuario no encontrado")
         rol = repo.get_rol_by_codigo(rol_codigo)
         if not rol: raise HTTPException(status_code=404, detail="Rol no encontrado")
-        repo.remove_role(usuario_id, rol.id)
+        repo.remove_role(usuario_id, rol.id) # type: ignore
         uow.session.refresh(usuario)
-        _ = usuario.roles
+        _ = usuario.roles # type: ignore
         return UsuarioResponse.model_validate(usuario)
 
 

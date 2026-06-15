@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Response, status
 from app.schemas.schemas import RegisterRequest, LoginRequest, TokenResponse, UsuarioResponse
 from app.services.auth_service import AuthService
-from app.dependencies import CurrentUser, get_current_user
-from app.config import settings
+from app.core.dependencies import CurrentUser, get_current_user
+from app.core.config import settings
 from fastapi import Depends
 from sqlmodel import Session
-from app.database import get_session
+from app.core.database import get_session
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 service = AuthService()
@@ -37,6 +37,6 @@ def logout(response: Response):
 def get_me(current_user: CurrentUser, session: Session = Depends(get_session)):
     from app.repositories import UsuarioRepository
     repo = UsuarioRepository(session)
-    usuario = repo.get_with_roles(current_user.id)
+    usuario = repo.get_with_roles(current_user.id) # type: ignore
     from app.schemas.schemas import UsuarioResponse
     return UsuarioResponse.model_validate(usuario).model_dump()

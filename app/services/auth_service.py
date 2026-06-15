@@ -3,7 +3,7 @@ from typing import Optional
 import bcrypt
 import jwt
 from fastapi import HTTPException, status
-from app.config import settings
+from app.core.config import settings
 from app.models import Usuario, RolCodigo
 from app.repositories import UsuarioRepository, UnitOfWork
 from app.schemas.schemas import RegisterRequest, LoginRequest, UsuarioResponse, TokenResponse
@@ -48,7 +48,7 @@ class AuthService:
             usuario = repo.create(usuario)
             rol_client = repo.get_rol_by_codigo(RolCodigo.CLIENT)
             if rol_client:
-                repo.assign_role(usuario.id, rol_client.id)
+                repo.assign_role(usuario.id, rol_client.id) # type: ignore
             uow.session.refresh(usuario)
             _ = usuario.roles
             token = create_access_token({"sub": str(usuario.id)})

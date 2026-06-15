@@ -1,11 +1,11 @@
 from contextlib import contextmanager
 from sqlmodel import Session
-from app.database import engine
+from app.core.database import engine
 
 
 class UnitOfWork:
     def __init__(self):
-        self.session: Session = None
+        self.session: Session = None # type: ignore
 
     def __enter__(self):
         self.session = Session(engine)

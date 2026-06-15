@@ -2,7 +2,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Query, status
 from app.schemas.schemas import CrearPedidoRequest, AvanzarEstadoRequest
 from app.services.pedido_service import PedidoService
-from app.dependencies import CurrentUser
+from app.core.dependencies import CurrentUser
 
 router = APIRouter(prefix="/api/v1/pedidos", tags=["pedidos"])
 service = PedidoService()

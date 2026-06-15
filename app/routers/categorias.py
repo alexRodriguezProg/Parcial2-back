@@ -2,7 +2,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Query, status
 from app.schemas.schemas import CategoriaCreate, CategoriaUpdate, CategoriaResponse, CategoriaConSubcategorias
 from app.services.categoria_service import CategoriaService
-from app.dependencies import AdminUser
+from app.core.dependencies import AdminUser
 
 router = APIRouter(prefix="/api/v1/categorias", tags=["categorias"])
 service = CategoriaService()

@@ -1,7 +1,7 @@
 from typing import Annotated, Optional
 from fastapi import Depends, HTTPException, Cookie, status 
 from sqlmodel import Session
-from app.database import get_session
+from app.core.database import get_session
 from app.models import Usuario, RolCodigo
 from app.repositories import UsuarioRepository
 from app.services.auth_service import decode_token

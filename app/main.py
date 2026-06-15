@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.config import settings
-from app.database import create_db_and_tables
+from app.core.config import settings
+from app.core.database import create_db_and_tables
 from app.routers.auth import router as auth_router
 from app.routers.categorias import router as categorias_router
 from app.routers.productos import ingredientes_router, productos_router

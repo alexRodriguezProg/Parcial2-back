@@ -4,7 +4,7 @@ from sqlmodel import Session
 from app.core.database import get_session
 from app.models import Usuario, RolCodigo
 from app.repositories import UsuarioRepository
-from app.services.auth_service import decode_token
+from app.core.security import decode_token
 
 def get_current_user(
         access_token: Optional[str] = Cookie(default=None),

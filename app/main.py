@@ -8,10 +8,10 @@ from app.routers.productos import ingredientes_router, productos_router
 from app.routers.pedidos import router as pedidos_router
 from app.routers.direcciones import router as direcciones_router
 from app.routers.admin import router as admin_router
+from app.routers.ws import router as ws_router
+from app.routers.pagos import router as pagos_router
 
-app = FastAPI(
-    title = "Parcial 2 API",
-)
+app = FastAPI(title="Food Store API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,11 +33,15 @@ app.include_router(productos_router)
 app.include_router(pedidos_router)
 app.include_router(direcciones_router)
 app.include_router(admin_router)
+app.include_router(ws_router)
+app.include_router(pagos_router)
+
 
 @app.on_event("startup")
 def on_startup():
-    create_db_and_tables
+    create_db_and_tables()
+
 
 @app.get("/")
 def root():
-    return{"message": "API funcionando"}
+    return {"message": "Food Store API funcionando"}

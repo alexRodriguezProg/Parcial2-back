@@ -8,3 +8,5 @@ bcrypt==4.2.0
 python-multipart==0.0.12
 pydantic[email]==2.9.2
 pydantic-settings==2.5.2
+mercadopago ==2.3.0 
+clodinary==1.41.0

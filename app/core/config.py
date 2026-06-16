@@ -18,6 +18,16 @@ class Settings(BaseSettings):
     FRONTEND_STORE_URL: str = "http://localhost:5173"
     FRONTEND_ADMIN_URL: str = "http://localhost:5174"
 
+    # MercadoPago
+    MP_ACCESS_TOKEN: str = ""
+    MP_PUBLIC_KEY: str = ""
+    MP_NOTIFICATION_URL: str = ""
+
+    # Cloudinary
+    CLOUDINARY_CLOUD_NAME: str = ""
+    CLOUDINARY_API_KEY: str = ""
+    CLOUDINARY_API_SECRET: str = ""
+
 
 @lru_cache()
 def get_settings() -> Settings:

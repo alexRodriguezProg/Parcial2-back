@@ -20,12 +20,14 @@ def list_formas_pago():
 
 @router.get("/")
 def list_pedidos(
-    current_user: CurrentUser,
-    skip: Annotated[int, Query(ge=0)] = 0,
-    limit: Annotated[int, Query(ge=1, le=100)] = 20,
-    estado_codigo: Annotated[Optional[str], Query()] = None,
+    current_user:  CurrentUser,
+    skip:          Annotated[int, Query(ge=0)]         = 0,
+    limit:         Annotated[int, Query(ge=1, le=100)] = 20,
+    estado_codigo: Annotated[Optional[str], Query()]   = None,
 ):
-    total, items = service.get_all(current_user=current_user, skip=skip, limit=limit, estado_codigo=estado_codigo)
+    total, items = service.get_all(
+        current_user=current_user, skip=skip, limit=limit, estado_codigo=estado_codigo
+    )
     return {"total": total, "skip": skip, "limit": limit, "items": items}
 
 
@@ -40,5 +42,10 @@ def crear_pedido(data: CrearPedidoRequest, current_user: CurrentUser):
 
 
 @router.patch("/{pedido_id}/estado")
-def avanzar_estado(pedido_id: int, data: AvanzarEstadoRequest, current_user: CurrentUser):
-    return service.avanzar_estado(pedido_id, data, current_user)
+async def avanzar_estado(pedido_id: int, data: AvanzarEstadoRequest, current_user: CurrentUser):
+    return await service.avanzar_estado(pedido_id, data, current_user)
+
+
+@router.get("/{pedido_id}/historial")
+def get_historial(pedido_id: int, current_user: CurrentUser):
+    return service.get_by_id(pedido_id, current_user)

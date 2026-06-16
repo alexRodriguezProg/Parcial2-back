@@ -1,14 +1,27 @@
 from typing import Optional
 from datetime import datetime
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from app.repositories import PedidoRepository, ProductoRepository, UnitOfWork
-from app.models import Pedido, DetallePedido, HistorialEstadoPedido, EstadoPedidoCodigo, RolCodigo, FormaPago
+from app.models import (
+    Pedido, DetallePedido, HistorialEstadoPedido,
+    EstadoPedidoCodigo, RolCodigo, FormaPago,
+)
 from app.schemas.schemas import (
     CrearPedidoRequest, AvanzarEstadoRequest,
     PedidoResponse, PedidoListResponse,
-    EstadoPedidoResponse, FormaPagoResponse
+    EstadoPedidoResponse, FormaPagoResponse,
 )
+from app.core.ws_manager import ws_manager
 from sqlmodel import select
+
+
+FSM: dict[EstadoPedidoCodigo, set[EstadoPedidoCodigo]] = {
+    EstadoPedidoCodigo.PENDIENTE:  {EstadoPedidoCodigo.CONFIRMADO, EstadoPedidoCodigo.CANCELADO},
+    EstadoPedidoCodigo.CONFIRMADO: {EstadoPedidoCodigo.EN_PREP,    EstadoPedidoCodigo.CANCELADO},
+    EstadoPedidoCodigo.EN_PREP:    {EstadoPedidoCodigo.ENTREGADO,  EstadoPedidoCodigo.CANCELADO},
+    EstadoPedidoCodigo.ENTREGADO:  set(),
+    EstadoPedidoCodigo.CANCELADO:  set(),
+}
 
 
 class PedidoService:
@@ -18,14 +31,14 @@ class PedidoService:
             repo = PedidoRepository(uow.session)
             user_roles = {r.codigo for r in current_user.roles}
             usuario_id = current_user.id if (
-                RolCodigo.CLIENT in user_roles and
-                RolCodigo.ADMIN not in user_roles and
-                RolCodigo.PEDIDOS not in user_roles
+                RolCodigo.CLIENT in user_roles
+                and RolCodigo.ADMIN not in user_roles
+                and RolCodigo.PEDIDOS not in user_roles
             ) else None
             pedidos, total = repo.get_all_with_filters(
                 skip=skip, limit=limit,
                 usuario_id=usuario_id,
-                estado_codigo=estado_codigo
+                estado_codigo=estado_codigo,
             )
             for p in pedidos:
                 _ = p.estado
@@ -47,7 +60,7 @@ class PedidoService:
 
     def crear_pedido(self, data: CrearPedidoRequest, current_user):
         with UnitOfWork() as uow:
-            pedido_repo = PedidoRepository(uow.session)
+            pedido_repo   = PedidoRepository(uow.session)
             producto_repo = ProductoRepository(uow.session)
 
             estado_pendiente = pedido_repo.get_estado_by_codigo(EstadoPedidoCodigo.PENDIENTE)
@@ -55,13 +68,16 @@ class PedidoService:
                 raise HTTPException(status_code=500, detail="Estado PENDIENTE no configurado")
 
             forma_pago = uow.session.exec(
-                select(FormaPago).where(FormaPago.id == data.forma_pago_id, FormaPago.activo == True)
+                select(FormaPago).where(
+                    FormaPago.codigo == data.forma_pago_codigo, # type: ignore
+                    FormaPago.habilitado == True,
+                )
             ).first()
             if not forma_pago:
                 raise HTTPException(status_code=404, detail="Forma de pago no encontrada")
 
             detalles_data = []
-            total = 0.0
+            subtotal = 0.0
             for item in data.items:
                 producto = producto_repo.get_active_by_id(item.producto_id)
                 if not producto:
@@ -70,72 +86,142 @@ class PedidoService:
                     raise HTTPException(status_code=400, detail=f"'{producto.nombre}' no está disponible")
                 if producto.stock_cantidad < item.cantidad:
                     raise HTTPException(status_code=400, detail=f"Stock insuficiente para '{producto.nombre}'")
-                subtotal = producto.precio * item.cantidad
-                total += subtotal
+
+                item_subtotal = producto.precio_base * item.cantidad
+                subtotal += item_subtotal
                 detalles_data.append({
-                    "producto_id": item.producto_id,
-                    "precio_unitario": producto.precio,
-                    "nombre_producto": producto.nombre,
-                    "cantidad": item.cantidad,
-                    "subtotal": subtotal,
+                    "producto_id":     item.producto_id,
+                    "cantidad":        item.cantidad,
+                    "nombre_snapshot": producto.nombre,
+                    "precio_snapshot": producto.precio_base,
+                    "subtotal_snap":   item_subtotal,
+                    "personalizacion": item.personalizacion, # type: ignore
                 })
                 producto.stock_cantidad -= item.cantidad
                 uow.session.add(producto)
 
+            descuento   = 0.0
+            costo_envio = 50.0
+            total = subtotal - descuento + costo_envio
+
             pedido = pedido_repo.create(Pedido(
-                usuario_id=current_user.id, estado_id=estado_pendiente.id,
-                forma_pago_id=data.forma_pago_id, direccion_id=data.direccion_id,
-                total=total, notas=data.notas,
+                usuario_id=current_user.id,
+                estado_codigo=EstadoPedidoCodigo.PENDIENTE,
+                forma_pago_codigo=data.forma_pago_codigo, # type: ignore
+                direccion_id=data.direccion_id,
+                subtotal=subtotal,
+                descuento=descuento,
+                costo_envio=costo_envio,
+                total=total,
+                notas=data.notas,
             ))
+
             for d in detalles_data:
-                pedido_repo.create_detalle(DetallePedido(pedido_id=pedido.id, **d))
+                pedido_repo.create_detalle(DetallePedido(pedido_id=pedido.id, **d)) # type: ignore
+
+            # RN-02: primer historial con estado_desde=None
             pedido_repo.append_historial(HistorialEstadoPedido(
-                pedido_id=pedido.id, estado_id=estado_pendiente.id,
-                usuario_id=current_user.id, notas="Pedido creado",
+                pedido_id=pedido.id, # type: ignore
+                estado_desde=None,
+                estado_hacia=EstadoPedidoCodigo.PENDIENTE,
+                usuario_id=current_user.id,
+                motivo="Pedido creado",
             ))
+
             uow.session.refresh(pedido)
             _ = pedido.detalles
             _ = pedido.estado
             _ = pedido.forma_pago
             _ = pedido.historial
-            return PedidoResponse.model_validate(pedido).model_dump()
+            result = PedidoResponse.model_validate(pedido).model_dump()
 
-    def avanzar_estado(self, pedido_id: int, data: AvanzarEstadoRequest, current_user):
+        return result
+
+    async def avanzar_estado(self, pedido_id: int, data: AvanzarEstadoRequest, current_user):
+        estado_anterior_codigo = None
+
         with UnitOfWork() as uow:
-            repo = PedidoRepository(uow.session)
+            repo   = PedidoRepository(uow.session)
             pedido = repo.get_with_detalles(pedido_id)
             if not pedido:
                 raise HTTPException(status_code=404, detail="Pedido no encontrado")
 
-            estado_actual = pedido.estado.codigo
-            nuevo_estado_codigo = data.nuevo_estado
+            estado_actual = pedido.estado_codigo
+            nuevo_estado  = data.nuevo_estado
 
-            if not repo.can_transition(estado_actual, nuevo_estado_codigo):
-                raise HTTPException(status_code=400, detail=f"Transición inválida: {estado_actual} → {nuevo_estado_codigo}")
+            # RN-01: estado terminal no admite transiciones
+            estado_obj = repo.get_estado_by_codigo(estado_actual)
+            if estado_obj and estado_obj.es_terminal:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"El estado {estado_actual} es terminal y no admite transiciones",
+                )
+
+            # Validar FSM
+            if nuevo_estado not in FSM.get(estado_actual, set()):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Transición inválida: {estado_actual} → {nuevo_estado}",
+                )
+
+            # RN-05: motivo obligatorio al cancelar
+            if nuevo_estado == EstadoPedidoCodigo.CANCELADO and not data.motivo : # type: ignore
+                raise HTTPException(
+                    status_code=422,
+                    detail="El motivo es obligatorio al cancelar un pedido",
+                )
 
             user_roles = {r.codigo for r in current_user.roles}
-            if nuevo_estado_codigo == EstadoPedidoCodigo.CANCELADO:
+
+            # Solo ADMIN/PEDIDOS pueden cancelar desde EN_PREP
+            if (
+                nuevo_estado == EstadoPedidoCodigo.CANCELADO
+                and estado_actual == EstadoPedidoCodigo.EN_PREP
+                and RolCodigo.ADMIN not in user_roles
+                and RolCodigo.PEDIDOS not in user_roles
+            ):
+                raise HTTPException(status_code=403, detail="Solo ADMIN o PEDIDOS pueden cancelar desde EN_PREP")
+
+            # CLIENT solo puede cancelar su propio pedido
+            if nuevo_estado == EstadoPedidoCodigo.CANCELADO:
                 if RolCodigo.CLIENT in user_roles and RolCodigo.ADMIN not in user_roles:
                     if pedido.usuario_id != current_user.id:
                         raise HTTPException(status_code=403, detail="No autorizado")
-                    if estado_actual not in [EstadoPedidoCodigo.PENDIENTE, EstadoPedidoCodigo.CONFIRMADO]:
-                        raise HTTPException(status_code=400, detail="Solo podés cancelar desde PENDIENTE o CONFIRMADO")
 
-            nuevo_estado = repo.get_estado_by_codigo(nuevo_estado_codigo)
-            pedido.estado_id = nuevo_estado.id
-            pedido.updated_at = datetime.utcnow()
+            estado_anterior_codigo = estado_actual
+            pedido.estado_codigo   = nuevo_estado
+            pedido.updated_at      = datetime.utcnow()
             uow.session.add(pedido)
             uow.session.flush()
+
+            # RN-03: append-only
             repo.append_historial(HistorialEstadoPedido(
-                pedido_id=pedido.id, estado_id=nuevo_estado.id,
-                usuario_id=current_user.id, notas=data.notas,
+                pedido_id=pedido.id, # type: ignore
+                estado_desde=estado_actual,
+                estado_hacia=nuevo_estado,
+                usuario_id=current_user.id,
+                motivo=data.motivo, # type: ignore
             ))
+
             uow.session.refresh(pedido)
             _ = pedido.detalles
             _ = pedido.estado
             _ = pedido.forma_pago
             _ = pedido.historial
-            return PedidoResponse.model_validate(pedido).model_dump()
+            result = PedidoResponse.model_validate(pedido).model_dump()
+
+        # RN-06: broadcast FUERA del UoW, post-commit
+        evento = ws_manager.build_evento(
+            event="pedido_cancelado" if nuevo_estado == EstadoPedidoCodigo.CANCELADO else "estado_cambiado",
+            pedido_id=pedido_id,
+            estado_nuevo=nuevo_estado,
+            estado_anterior=estado_anterior_codigo,
+            usuario_id=current_user.id,
+            motivo=data.motivo, # type: ignore
+        )
+        await ws_manager.broadcast_pedido(pedido_id, evento)
+
+        return result
 
     def get_estados(self):
         with UnitOfWork() as uow:

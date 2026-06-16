@@ -10,6 +10,7 @@ from app.routers.direcciones import router as direcciones_router
 from app.routers.admin import router as admin_router
 from app.routers.ws import router as ws_router
 from app.routers.pagos import router as pagos_router
+from app.routers.uploads import router as uploads_router
 
 app = FastAPI(title="Food Store API")
 
@@ -35,6 +36,7 @@ app.include_router(direcciones_router)
 app.include_router(admin_router)
 app.include_router(ws_router)
 app.include_router(pagos_router)
+app.include_router(uploads_router)
 
 
 @app.on_event("startup")

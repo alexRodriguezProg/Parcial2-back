@@ -20,7 +20,7 @@ class AuthService:
             usuario = repo.create(usuario)
             rol_client = repo.get_rol_by_codigo(RolCodigo.CLIENT)
             if rol_client:
-                repo.assign_role(usuario.id, rol_client.id)  # type: ignore
+                repo.assign_role(usuario.id, rol_client.codigo)  # type: ignore
             uow.session.refresh(usuario)
             _ = usuario.roles
             token = create_access_token({"sub": str(usuario.id)})

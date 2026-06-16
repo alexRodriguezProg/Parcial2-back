@@ -1,8 +1,7 @@
 from typing import Optional, List
 from datetime import datetime
 from sqlmodel import SQLModel, Field, Relationship, Column
-from sqlalchemy import Text
-from sqlalchemy.dialects.postgresql import ARRAY, INTEGER
+from sqlalchemy import Text, JSON   
 from enum import Enum
 
 
@@ -145,7 +144,7 @@ class Producto(SQLModel, table=True):
     nombre:          str                 = Field(max_length=150)
     descripcion:     Optional[str]       = Field(default=None, sa_column=Column(Text))
     precio_base:     float               = Field(ge=0)
-    imagenes_url:    Optional[List[str]] = Field(default=None, sa_column=Column(ARRAY(Text)))
+    imagenes_url:    Optional[List[str]] = Field(default=None, sa_column=Column(JSON))
     stock_cantidad:  int                 = Field(default=0, ge=0)
     disponible:      bool                = Field(default=True)
     created_at:      datetime            = Field(default_factory=datetime.utcnow)
@@ -239,7 +238,7 @@ class DetallePedido(SQLModel, table=True):
     precio_snapshot: float          = Field(ge=0)
     subtotal_snap:   float          = Field(ge=0)
     personalizacion: Optional[List[int]] = Field(
-        default=None, sa_column=Column(ARRAY(INTEGER))
+        default=None, sa_column=Column(JSON)
     )
     created_at: datetime = Field(default_factory=datetime.utcnow)
     pedido:   Optional[Pedido]   = Relationship(back_populates="detalles")

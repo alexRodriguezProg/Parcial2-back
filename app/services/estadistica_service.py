@@ -17,7 +17,7 @@ class EstadisticaService:
                 WHERE p.estado_codigo != 'CANCELADO'
                   AND pa.mp_status = 'approved'
                   AND DATE(p.created_at) = :hoy
-            """), {"hoy": hoy}).scalar() or 0
+            """).bindparams(hoy=hoy)).scalar() or 0
 
             ticket_promedio = session.exec(text("""
                 SELECT COALESCE(AVG(p.total), 0)
@@ -40,7 +40,7 @@ class EstadisticaService:
                 JOIN pago pa ON pa.pedido_id = p.id
                 WHERE p.estado_codigo != 'CANCELADO'
                   AND pa.mp_status = 'approved'
-                  AND DATE_TRUNC('month', p.created_at) = DATE_TRUNC('month', CURRENT_DATE)
+                  AND strftime('%Y-%m', p.created_at) = strftime('%Y-%m', 'now')
             """)).scalar() or 0
 
             return {
@@ -57,17 +57,17 @@ class EstadisticaService:
         with UnitOfWork() as uow:
             rows = uow.session.exec(text("""
                 SELECT
-                    DATE_TRUNC(:agrupacion, p.created_at)::date AS periodo,
-                    COUNT(p.id)                                  AS cantidad_pedidos,
-                    COALESCE(SUM(p.total), 0)                   AS total_ventas
+                    DATE(p.created_at)        AS periodo,
+                    COUNT(p.id)               AS cantidad_pedidos,
+                    COALESCE(SUM(p.total), 0) AS total_ventas
                 FROM pedido p
                 JOIN pago pa ON pa.pedido_id = p.id
                 WHERE p.estado_codigo != 'CANCELADO'
                   AND pa.mp_status = 'approved'
                   AND DATE(p.created_at) BETWEEN :desde AND :hasta
-                GROUP BY 1
-                ORDER BY 1 ASC
-            """), {"agrupacion": agrupacion, "desde": desde, "hasta": hasta}).all()
+                GROUP BY DATE(p.created_at)
+                ORDER BY DATE(p.created_at) ASC
+            """).bindparams(desde=str(desde), hasta=str(hasta))).all()
 
             return [
                 {
@@ -91,7 +91,7 @@ class EstadisticaService:
                 GROUP BY dp.nombre_snapshot
                 ORDER BY ingresos DESC
                 LIMIT :limit
-            """), {"limit": limit}).all()
+            """).bindparams(limit=limit)).all()
 
             return [
                 {
@@ -131,7 +131,7 @@ class EstadisticaService:
                   AND DATE(p.created_at) BETWEEN :desde AND :hasta
                 GROUP BY p.forma_pago_codigo
                 ORDER BY total DESC
-            """), {"desde": desde, "hasta": hasta}).all()
+            """).bindparams(desde=str(desde), hasta=str(hasta))).all()
 
             return [
                 {

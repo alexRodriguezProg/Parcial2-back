@@ -1,5 +1,5 @@
 from typing import Optional, List
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 from app.repositories.base import BaseRepository
 from app.models import Usuario, Rol, UsuarioRol, RolCodigo
 
@@ -26,25 +26,29 @@ class UsuarioRepository(BaseRepository[Usuario]):
             statement = (
                 statement
                 .join(UsuarioRol, UsuarioRol.usuario_id == Usuario.id)
-                .join(Rol, Rol.id == UsuarioRol.rol_id)
-                .where(Rol.codigo == rol_codigo)
+                .where(UsuarioRol.rol_codigo == rol_codigo)
             )
-        from sqlmodel import func
         total = self.session.exec(select(func.count()).select_from(statement.subquery())).one()
         usuarios = self.session.exec(statement.offset(skip).limit(limit)).all()
         return usuarios, total
 
-    def assign_role(self, usuario_id: int, rol_id: int) -> None:
+    def assign_role(self, usuario_id: int, rol_codigo: RolCodigo) -> None:
         existing = self.session.exec(
-            select(UsuarioRol).where(UsuarioRol.usuario_id == usuario_id, UsuarioRol.rol_id == rol_id)
+            select(UsuarioRol).where(
+                UsuarioRol.usuario_id == usuario_id,
+                UsuarioRol.rol_codigo == rol_codigo,
+            )
         ).first()
         if not existing:
-            self.session.add(UsuarioRol(usuario_id=usuario_id, rol_id=rol_id))
+            self.session.add(UsuarioRol(usuario_id=usuario_id, rol_codigo=rol_codigo))
             self.session.flush()
 
-    def remove_role(self, usuario_id: int, rol_id: int) -> None:
+    def remove_role(self, usuario_id: int, rol_codigo: RolCodigo) -> None:
         existing = self.session.exec(
-            select(UsuarioRol).where(UsuarioRol.usuario_id == usuario_id, UsuarioRol.rol_id == rol_id)
+            select(UsuarioRol).where(
+                UsuarioRol.usuario_id == usuario_id,
+                UsuarioRol.rol_codigo == rol_codigo,
+            )
         ).first()
         if existing:
             self.session.delete(existing)

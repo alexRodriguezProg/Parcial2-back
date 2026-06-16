@@ -197,6 +197,7 @@ class DireccionResponse(BaseModel):
 class ItemCarrito(BaseModel):
     producto_id: int
     cantidad: int
+    personalizacion: Optional[List[int]] = None
 
     @field_validator("cantidad")
     @classmethod
@@ -208,74 +209,74 @@ class ItemCarrito(BaseModel):
 
 class CrearPedidoRequest(BaseModel):
     items: List[ItemCarrito]
-    forma_pago_id: int
+    forma_pago_codigo: FormaPagoCodigo
     direccion_id: Optional[int] = None
     notas: Optional[str] = None
 
 
 class AvanzarEstadoRequest(BaseModel):
     nuevo_estado: EstadoPedidoCodigo
-    notas: Optional[str] = None
+    motivo: Optional[str] = None
 
 
 class EstadoPedidoResponse(BaseModel):
-    id: int
-    nombre: str
     codigo: EstadoPedidoCodigo
+    descripcion: str
+    orden: int
+    es_terminal: bool
     class Config:
         from_attributes = True
 
 
 class FormaPagoResponse(BaseModel):
-    id: int
-    nombre: str
     codigo: FormaPagoCodigo
+    descripcion: str
+    habilitado: bool
     class Config:
         from_attributes = True
 
 
 class DetallePedidoResponse(BaseModel):
-    id: int
     producto_id: int
-    nombre_producto: str
-    precio_unitario: float
     cantidad: int
-    subtotal: float
-    class Config:
-        from_attributes = True
+    nombre_snapshot: str
+    precio_snapshot: float
+    subtotal_snap: float
+    personalizacion: Optional[List[int]] = None
+    model_config = {"from_attributes": True}
 
 
 class HistorialEstadoResponse(BaseModel):
     id: int
-    estado: EstadoPedidoResponse
-    notas: Optional[str]
+    estado_desde: Optional[EstadoPedidoCodigo] = None
+    estado_hacia: EstadoPedidoCodigo
+    motivo: Optional[str] = None
     created_at: datetime
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class PedidoResponse(BaseModel):
     id: int
     usuario_id: int
-    estado: EstadoPedidoResponse
-    forma_pago: FormaPagoResponse
-    direccion: Optional[DireccionResponse]
+    estado_codigo: EstadoPedidoCodigo
+    forma_pago_codigo: FormaPagoCodigo
+    subtotal: float
+    descuento: float
+    costo_envio: float
     total: float
-    notas: Optional[str]
+    notas: Optional[str] = None
     detalles: List[DetallePedidoResponse] = []
     historial: List[HistorialEstadoResponse] = []
     created_at: datetime
     updated_at: datetime
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class PedidoListResponse(BaseModel):
     id: int
     usuario_id: int
-    estado: EstadoPedidoResponse
-    forma_pago: FormaPagoResponse
+    estado_codigo: EstadoPedidoCodigo
+    forma_pago_codigo: FormaPagoCodigo
     total: float
     created_at: datetime
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}

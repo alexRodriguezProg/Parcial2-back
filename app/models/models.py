@@ -51,7 +51,12 @@ class Usuario(SQLModel, table=True):
     created_at:    datetime       = Field(default_factory=datetime.utcnow)
     updated_at:    datetime       = Field(default_factory=datetime.utcnow)
     deleted_at:    Optional[datetime] = Field(default=None)
-    usuarios_rol:  List["UsuarioRol"]           = Relationship(back_populates="usuario")
+    usuarios_rol: List["UsuarioRol"] = Relationship(
+    back_populates="usuario",
+    sa_relationship_kwargs={
+        "foreign_keys": "[UsuarioRol.usuario_id]",
+    },
+)
     direcciones:   List["DireccionEntrega"]      = Relationship(back_populates="usuario")
     pedidos:       List["Pedido"]               = Relationship(back_populates="usuario")
     historial:     List["HistorialEstadoPedido"] = Relationship(back_populates="usuario")
@@ -62,15 +67,17 @@ class Usuario(SQLModel, table=True):
 
 
 class UsuarioRol(SQLModel, table=True):
-    __tablename__ = "usuario_rol" # type: ignore
+    __tablename__ = "usuario_rol"
     usuario_id:      int              = Field(foreign_key="usuario.id", primary_key=True)
     rol_codigo:      RolCodigo        = Field(foreign_key="rol.codigo", primary_key=True, max_length=20)
     asignado_por_id: Optional[int]    = Field(default=None, foreign_key="usuario.id")
     expires_at:      Optional[datetime] = Field(default=None)
     created_at:      datetime          = Field(default_factory=datetime.utcnow)
-    usuario: Optional[Usuario] = Relationship(
+    usuario: Optional["Usuario"] = Relationship(
         back_populates="usuarios_rol",
-        sa_relationship_kwargs={"foreign_keys": "[UsuarioRol.usuario_id]"},
+        sa_relationship_kwargs={
+            "foreign_keys": "UsuarioRol.usuario_id",
+        },
     )
     rol: Optional[Rol] = Relationship(back_populates="usuarios_rol")
 

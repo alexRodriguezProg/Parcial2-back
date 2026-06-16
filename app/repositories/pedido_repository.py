@@ -1,19 +1,14 @@
 from typing import Optional, List
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 from app.repositories.base import BaseRepository
-from app.models import Pedido, DetallePedido, HistorialEstadoPedido, EstadoPedido, EstadoPedidoCodigo, FormaPago
-
-TRANSICIONES_VALIDAS = {
-    EstadoPedidoCodigo.PENDIENTE:  [EstadoPedidoCodigo.CONFIRMADO, EstadoPedidoCodigo.CANCELADO],
-    EstadoPedidoCodigo.CONFIRMADO: [EstadoPedidoCodigo.EN_PREP,    EstadoPedidoCodigo.CANCELADO],
-    EstadoPedidoCodigo.EN_PREP:    [EstadoPedidoCodigo.EN_CAMINO],
-    EstadoPedidoCodigo.EN_CAMINO:  [EstadoPedidoCodigo.ENTREGADO],
-    EstadoPedidoCodigo.ENTREGADO:  [],
-    EstadoPedidoCodigo.CANCELADO:  [],
-}
+from app.models import (
+    Pedido, DetallePedido, HistorialEstadoPedido,
+    EstadoPedido, EstadoPedidoCodigo, FormaPago,
+)
 
 
 class PedidoRepository(BaseRepository[Pedido]):
+
     def __init__(self, session: Session):
         super().__init__(Pedido, session)
 
@@ -22,17 +17,16 @@ class PedidoRepository(BaseRepository[Pedido]):
         if usuario_id is not None:
             statement = statement.where(Pedido.usuario_id == usuario_id)
         if estado_codigo:
-            statement = (statement
-                .join(EstadoPedido, EstadoPedido.id == Pedido.estado_id)
-                .where(EstadoPedido.codigo == estado_codigo))
+            statement = statement.where(Pedido.estado_codigo == estado_codigo)
         statement = statement.order_by(Pedido.created_at.desc())
-        from sqlmodel import func
-        total = self.session.exec(select(func.count()).select_from(statement.subquery())).one()
+        total   = self.session.exec(select(func.count()).select_from(statement.subquery())).one()
         pedidos = self.session.exec(statement.offset(skip).limit(limit)).all()
         return pedidos, total
 
     def get_with_detalles(self, pedido_id: int) -> Optional[Pedido]:
-        pedido = self.get_active_by_id(pedido_id)
+        pedido = self.session.exec(
+            select(Pedido).where(Pedido.id == pedido_id, Pedido.deleted_at == None)
+        ).first()
         if pedido:
             _ = pedido.detalles
             _ = pedido.historial
@@ -41,13 +35,17 @@ class PedidoRepository(BaseRepository[Pedido]):
         return pedido
 
     def get_estado_by_codigo(self, codigo: EstadoPedidoCodigo) -> Optional[EstadoPedido]:
-        return self.session.exec(select(EstadoPedido).where(EstadoPedido.codigo == codigo)).first()
+        return self.session.exec(
+            select(EstadoPedido).where(EstadoPedido.codigo == codigo)
+        ).first()
 
     def get_all_estados(self) -> List[EstadoPedido]:
-        return self.session.exec(select(EstadoPedido)).all()
+        return self.session.exec(select(EstadoPedido).order_by(EstadoPedido.orden)).all()
 
     def get_all_formas_pago(self) -> List[FormaPago]:
-        return self.session.exec(select(FormaPago).where(FormaPago.activo == True)).all()
+        return self.session.exec(
+            select(FormaPago).where(FormaPago.habilitado == True)
+        ).all()
 
     def create_detalle(self, detalle: DetallePedido) -> DetallePedido:
         self.session.add(detalle)
@@ -65,6 +63,3 @@ class PedidoRepository(BaseRepository[Pedido]):
             .where(HistorialEstadoPedido.pedido_id == pedido_id)
             .order_by(HistorialEstadoPedido.created_at.asc())
         ).all()
-
-    def can_transition(self, actual: EstadoPedidoCodigo, nuevo: EstadoPedidoCodigo) -> bool:
-        return nuevo in TRANSICIONES_VALIDAS.get(actual, [])

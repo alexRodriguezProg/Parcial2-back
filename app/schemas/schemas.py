@@ -25,9 +25,8 @@ class LoginRequest(BaseModel):
 
 
 class RolResponse(BaseModel):
-    id: int
-    nombre: str
     codigo: RolCodigo
+    nombre: str
     class Config:
         from_attributes = True
 
@@ -37,7 +36,7 @@ class UsuarioResponse(BaseModel):
     nombre: str
     apellido: str
     email: str
-    telefono: Optional[str]
+    celular: Optional[str] = None
     activo: bool
     created_at: datetime
     roles: List[RolResponse] = []

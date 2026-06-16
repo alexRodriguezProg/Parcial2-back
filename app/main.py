@@ -11,6 +11,7 @@ from app.routers.admin import router as admin_router
 from app.routers.ws import router as ws_router
 from app.routers.pagos import router as pagos_router
 from app.routers.uploads import router as uploads_router
+from app.routers.estadisticas import router as estadisiticas_router
 
 app = FastAPI(title="Food Store API")
 
@@ -37,7 +38,7 @@ app.include_router(admin_router)
 app.include_router(ws_router)
 app.include_router(pagos_router)
 app.include_router(uploads_router)
-
+app.include_router(estadisiticas_router)
 
 @app.on_event("startup")
 def on_startup():

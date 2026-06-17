@@ -1,11 +1,17 @@
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 from functools import lru_cache
+from pathlib import Path
+
+# Resuelve la ruta al .env de forma absoluta desde la ubicación de este archivo,
+# subiendo hasta la raíz del proyecto (Parcial2-back/).
+# Estructura: app/core/config.py -> sube 2 niveles -> raíz del proyecto
+ENV_FILE_PATH = Path(__file__).resolve().parents[2] / ".env"
 
 
 class Settings(BaseSettings):
     model_config = ConfigDict(
-        env_file=".env",
+        env_file=str(ENV_FILE_PATH),
         env_file_encoding="utf-8-sig",
         extra="ignore",
         case_sensitive=False,

@@ -153,7 +153,7 @@ class ProductoResponse(BaseModel):
 
 class AddIngredienteRequest(BaseModel):
     ingrediente_id: int
-    cantidad: Optional[str] = None
+    cantidad: Optional[float] = None
 
 
 class DireccionCreate(BaseModel):

@@ -157,21 +157,19 @@ class AddIngredienteRequest(BaseModel):
 
 
 class DireccionCreate(BaseModel):
-    alias: str = "Casa"
-    calle: str
-    numero: str
-    piso: Optional[str] = None
+    alias: Optional[str] = "Casa"
+    linea1: str
+    linea2: Optional[str] = None
     ciudad: str
-    provincia: str
+    provincia: Optional[str] = None
     codigo_postal: Optional[str] = None
     es_principal: bool = False
 
 
 class DireccionUpdate(BaseModel):
     alias: Optional[str] = None
-    calle: Optional[str] = None
-    numero: Optional[str] = None
-    piso: Optional[str] = None
+    linea1: Optional[str] = None
+    linea2: Optional[str] = None
     ciudad: Optional[str] = None
     provincia: Optional[str] = None
     codigo_postal: Optional[str] = None
@@ -179,18 +177,16 @@ class DireccionUpdate(BaseModel):
 
 class DireccionResponse(BaseModel):
     id: int
-    alias: str
-    calle: str
-    numero: str
-    piso: Optional[str]
+    alias: Optional[str]
+    linea1: str
+    linea2: Optional[str]
     ciudad: str
-    provincia: str
+    provincia: Optional[str]
     codigo_postal: Optional[str]
     es_principal: bool
     created_at: datetime
     class Config:
         from_attributes = True
-
 
 class ItemCarrito(BaseModel):
     producto_id: int

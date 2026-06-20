@@ -15,6 +15,8 @@ Backend REST + WebSocket del sistema Food Store, desarrollado con FastAPI + SQLM
 
 ## Setup
 
+⚠️ **Importante:** usar Python **3.12 o anterior**. Con Python 3.13 falla la instalación de `psycopg2-binary` (requiere compilar con Microsoft Visual C++ Build Tools en Windows). Verificá tu versión con `python --version` antes de crear el entorno virtual.
+
 ### 1. Clonar el repositorio
 
 ```bash

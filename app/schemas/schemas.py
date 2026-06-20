@@ -81,7 +81,6 @@ class CategoriaResponse(BaseModel):
     descripcion: Optional[str]
     imagen_url: Optional[str]
     parent_id: Optional[int]
-    activo: bool
     created_at: datetime
     class Config:
         from_attributes = True
@@ -116,20 +115,20 @@ class IngredienteResponse(BaseModel):
 class ProductoCreate(BaseModel):
     nombre: str
     descripcion: Optional[str] = None
-    precio: float
-    imagen_url: Optional[str] = None
+    precio_base: float
+    imagenes_url: Optional[List[str]] = None
     stock_cantidad: int = 0
     disponible: bool = True
-    categoria_id: Optional[int] = None
+    unidad_venta_id: Optional[int] = None
 
 
 class ProductoUpdate(BaseModel):
     nombre: Optional[str] = None
     descripcion: Optional[str] = None
-    precio: Optional[float] = None
-    imagen_url: Optional[str] = None
+    precio_base: Optional[float] = None
     stock_cantidad: Optional[int] = None
-    categoria_id: Optional[int] = None
+    disponible: Optional[bool] = None
+    unidad_venta_id: Optional[int] = None
 
 
 class ProductoDisponibilidadUpdate(BaseModel):
@@ -141,12 +140,11 @@ class ProductoResponse(BaseModel):
     id: int
     nombre: str
     descripcion: Optional[str]
-    precio: float
-    imagen_url: Optional[str]
+    precio_base: float
+    imagenes_url: Optional[List[str]]
     stock_cantidad: int
     disponible: bool
-    categoria_id: Optional[int]
-    categoria: Optional[CategoriaResponse]
+    unidad_venta_id: Optional[int]
     ingredientes: List[IngredienteResponse] = []
     created_at: datetime
     class Config:

@@ -134,7 +134,7 @@ class Ingrediente(SQLModel, table=True):
     es_alergeno:    bool          = Field(default=False)
     created_at:     datetime      = Field(default_factory=datetime.utcnow)
     updated_at:     datetime      = Field(default_factory=datetime.utcnow)
-    productos_ingrediente: List["ProductoIngrediente"] = Relationship(back_populates="ingrediente")
+    deleted_at:     Optional[datetime] = Field(default=None)
 
 
 class Producto(SQLModel, table=True):

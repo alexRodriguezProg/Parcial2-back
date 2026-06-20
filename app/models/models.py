@@ -135,7 +135,7 @@ class Ingrediente(SQLModel, table=True):
     created_at:     datetime      = Field(default_factory=datetime.utcnow)
     updated_at:     datetime      = Field(default_factory=datetime.utcnow)
     deleted_at:     Optional[datetime] = Field(default=None)
-
+    productos_ingrediente: List["ProductoIngrediente"] = Relationship(back_populates="ingrediente")
 
 class Producto(SQLModel, table=True):
     __tablename__ = "producto" # type: ignore

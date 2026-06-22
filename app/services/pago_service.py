@@ -1,4 +1,6 @@
 import uuid
+import json
+import requests
 import mercadopago
 from fastapi import HTTPException
 from sqlmodel import select
@@ -7,9 +9,36 @@ from app.core.ws_manager import ws_manager
 from app.models import Pago, Pedido, EstadoPedidoCodigo, HistorialEstadoPedido, RolCodigo
 from app.repositories import PedidoRepository, UnitOfWork
 
+MP_API_BASE = "https://api.mercadopago.com"
+
 
 def _get_sdk() -> mercadopago.SDK:
     return mercadopago.SDK(settings.MP_ACCESS_TOKEN)
+
+
+def _crear_preferencia_mp(preference_data: dict) -> dict:
+    """Crea una preferencia en MP usando requests directamente.
+    
+    El SDK de Python tiene bugs con ciertos campos como auto_return,
+    por eso usamos la API REST directamente.
+    """
+    headers = {
+        "Authorization": f"Bearer {settings.MP_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    resp = requests.post(
+        f"{MP_API_BASE}/checkout/preferences",
+        headers=headers,
+        data=json.dumps(preference_data),
+        timeout=30,
+    )
+    if resp.status_code not in (200, 201):
+        detail = resp.json().get("message", "") if resp.content else ""
+        raise HTTPException(
+            status_code=502,
+            detail=f"Error al crear preferencia en MercadoPago (HTTP {resp.status_code}): {detail}",
+        )
+    return resp.json()
 
 
 class PagoService:
@@ -38,7 +67,6 @@ class PagoService:
             external_reference = str(uuid.uuid4())
             idempotency_key    = str(uuid.uuid4())
 
-            sdk = _get_sdk()
             preference_data = {
                 "items": [
                     {
@@ -49,20 +77,17 @@ class PagoService:
                     }
                     for d in pedido.detalles
                 ],
+                "auto_return":        "approved",
                 "external_reference": external_reference,
                 "notification_url":   settings.MP_NOTIFICATION_URL,
                 "back_urls": {
-                    "success": f"{settings.FRONTEND_STORE_URL}/pedidos/{pedido_id}",
-                    "failure": f"{settings.FRONTEND_STORE_URL}/pedidos/{pedido_id}",
-                    "pending": f"{settings.FRONTEND_STORE_URL}/pedidos/{pedido_id}",
+                    "success": f"https://localhost:5173/pedidos/{pedido_id}?status=approved",
+                    "failure": f"https://localhost:5173/pedidos/{pedido_id}?status=rejected",
+                    "pending": f"https://localhost:5173/pedidos/{pedido_id}?status=pending",
                 },
             }
 
-            response = sdk.preference().create(preference_data)
-            if response["status"] not in (200, 201):
-                raise HTTPException(status_code=502, detail="Error al crear preferencia en MercadoPago")
-
-            preference = response["response"]
+            preference = _crear_preferencia_mp(preference_data)
 
             pago = Pago(
                 pedido_id=pedido_id,

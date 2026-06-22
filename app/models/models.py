@@ -178,6 +178,7 @@ class ProductoIngrediente(SQLModel, table=True):
     unidad_medida: Optional[UnidadMedida]  = Relationship(back_populates="ingredientes")
 
 
+# ─── Dominio 3: Ventas, Pagos & Trazabilidad ─────────────────────────────────
 
 class FormaPago(SQLModel, table=True):
     __tablename__ = "forma_pago" # type: ignore

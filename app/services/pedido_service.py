@@ -101,7 +101,7 @@ class PedidoService:
                 uow.session.add(producto)
 
             descuento   = 0.0
-            costo_envio = 50.0
+            costo_envio = 0.0  # Sin lógica de envío implementada aún
             total = subtotal - descuento + costo_envio
 
             pedido = pedido_repo.create(Pedido(

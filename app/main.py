@@ -26,7 +26,7 @@ from app.routers.estadisticas import router as estadisiticas_router
 
 app = FastAPI(title="Food Store API")
 
-# ─── Middleware ────────────────────────────────────────────────────────────
+
 app.add_middleware(TimingLoggingMiddleware)
 
 app.add_middleware(
@@ -42,12 +42,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ─── Exception Handlers globales ──────────────────────────────────────────
+
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, generic_exception_handler)
 
-# ─── Routers ───────────────────────────────────────────────────────────────
+
 app.include_router(auth_router)
 app.include_router(categorias_router)
 app.include_router(ingredientes_router)

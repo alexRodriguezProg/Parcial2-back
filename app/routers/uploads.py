@@ -12,11 +12,11 @@ async def upload_imagen(
     folder: str        = Query(default="foodstore/productos"),
     _:      AdminUser  = None, # type: ignore
 ):
-    """Sube una imagen a Cloudinary. Devuelve secure_url y public_id. Solo ADMIN."""
+    
     return await service.upload_imagen(file, folder)
 
 
 @router.delete("/imagen/{public_id:path}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_imagen(public_id: str, _: AdminUser = None): # type: ignore
-    """Elimina una imagen de Cloudinary por su public_id. Solo ADMIN."""
+    
     service.delete_imagen(public_id)

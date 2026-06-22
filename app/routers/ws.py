@@ -25,7 +25,7 @@ async def ws_pedido(
     pedido_id: int,
     token: str = Query(...),
 ):
-    """Canal de seguimiento para el cliente propietario del pedido."""
+    
     try:
         usuario = _autenticar_ws(token)
     except Exception:
@@ -50,7 +50,7 @@ async def ws_admin_pedidos(
     websocket: WebSocket,
     token: str = Query(...),
 ):
-    """Feed de todos los pedidos para ADMIN y PEDIDOS."""
+    
     try:
         usuario = _autenticar_ws(token)
     except Exception:

@@ -5,10 +5,6 @@ from app.core.logging_config import logger
 
 
 class TimingLoggingMiddleware(BaseHTTPMiddleware):
-    """
-    Loguea cada petición HTTP con: método, ruta, status code, IP y tiempo de respuesta.
-    Ejemplo: GET /api/v1/productos/ -> 200 (12.4ms) [127.0.0.1]
-    """
 
     async def dispatch(self, request: Request, call_next):
         start_time = time.perf_counter()

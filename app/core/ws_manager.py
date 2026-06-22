@@ -5,12 +5,6 @@ from fastapi import WebSocket
 
 
 class WSManager:
-    """
-    Singleton que gestiona el pool de conexiones WebSocket.
-    Canales:
-      - pedido_{id}  → cliente dueño del pedido
-      - admin        → roles ADMIN y PEDIDOS
-    """
 
     def __init__(self):
         self._connections: Dict[str, Set[WebSocket]] = {}
@@ -44,7 +38,7 @@ class WSManager:
             self.disconnect(ws, canal)
 
     async def broadcast_pedido(self, pedido_id: int, evento: dict) -> None:
-        """Notifica al cliente dueño del pedido Y al canal admin. Post-commit (RN-06)."""
+       
         await self._broadcast(self._canal_pedido(pedido_id), evento)
         await self._broadcast("admin", evento)
 
@@ -71,5 +65,4 @@ class WSManager:
         }
 
 
-# Singleton global
 ws_manager = WSManager()

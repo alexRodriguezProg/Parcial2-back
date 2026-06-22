@@ -13,7 +13,7 @@ def crear_pago(pedido_id: int, current_user: CurrentUser):
 
 @router.post("/webhook")
 async def webhook(request: Request):
-    """Endpoint IPN de MercadoPago. Recibe ?topic=payment&id=<payment_id>"""
+   
     params      = dict(request.query_params)
     topic       = params.get("topic") or params.get("type", "")
     resource_id = params.get("id") or params.get("data.id", "")

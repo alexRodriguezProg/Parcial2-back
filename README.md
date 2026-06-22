@@ -61,3 +61,6 @@ python -m app.seed
 ```
 
 Carga roles, estados, formas de pago,
+
+### LINK DEL VIDEO EN YOUTUBE 📹
+https://youtu.be/0HqaPilu_jw

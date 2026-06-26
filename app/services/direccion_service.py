@@ -6,19 +6,22 @@ from app.schemas.schemas import DireccionCreate, DireccionUpdate, DireccionRespo
 
 class DireccionService:
 
-    def get_all(self, usuario_id: int):
+    def get_all(self, usuario_id: int) -> list:
+        """Devuelve las direcciones de un usuario."""
         with UnitOfWork() as uow:
             dirs = DireccionRepository(uow.session).get_by_usuario(usuario_id)
             return [DireccionResponse.model_validate(d).model_dump() for d in dirs]
 
-    def get_by_id(self, direccion_id: int, usuario_id: int):
+    def get_by_id(self, direccion_id: int, usuario_id: int) -> dict:
+        """Devuelve una dirección por ID, validando pertenencia."""
         with UnitOfWork() as uow:
             d = DireccionRepository(uow.session).get_active_by_id(direccion_id)
             if not d or d.usuario_id != usuario_id:
                 raise HTTPException(status_code=404, detail="Dirección no encontrada")
             return DireccionResponse.model_validate(d).model_dump()
 
-    def create(self, data: DireccionCreate, usuario_id: int):
+    def create(self, data: DireccionCreate, usuario_id: int) -> dict:
+        """Crea una dirección para el usuario."""
         with UnitOfWork() as uow:
             repo = DireccionRepository(uow.session)
             if data.es_principal:
@@ -27,7 +30,8 @@ class DireccionService:
             uow.session.refresh(d)
             return DireccionResponse.model_validate(d).model_dump()
 
-    def update(self, direccion_id: int, data: DireccionUpdate, usuario_id: int):
+    def update(self, direccion_id: int, data: DireccionUpdate, usuario_id: int) -> dict:
+        """Actualiza una dirección existente."""
         with UnitOfWork() as uow:
             repo = DireccionRepository(uow.session)
             d = repo.get_active_by_id(direccion_id)
@@ -36,7 +40,8 @@ class DireccionService:
             d = repo.update(d, data.model_dump(exclude_unset=True))
             return DireccionResponse.model_validate(d).model_dump()
 
-    def set_principal(self, direccion_id: int, usuario_id: int):
+    def set_principal(self, direccion_id: int, usuario_id: int) -> dict:
+        """Marca una dirección como principal, desmarcando las demás."""
         with UnitOfWork() as uow:
             repo = DireccionRepository(uow.session)
             d = repo.get_active_by_id(direccion_id)
@@ -49,7 +54,8 @@ class DireccionService:
             uow.session.refresh(d)
             return DireccionResponse.model_validate(d).model_dump()
 
-    def delete(self, direccion_id: int, usuario_id: int):
+    def delete(self, direccion_id: int, usuario_id: int) -> None:
+        """Elimina (soft delete) una dirección."""
         with UnitOfWork() as uow:
             repo = DireccionRepository(uow.session)
             d = repo.get_active_by_id(direccion_id)

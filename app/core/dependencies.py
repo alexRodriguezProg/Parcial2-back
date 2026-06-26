@@ -10,6 +10,7 @@ def get_current_user(
         access_token: Optional[str] = Cookie(default=None),
         session: Session = Depends(get_session),
 ) -> Usuario:
+    """Obtiene el usuario autenticado desde la cookie JWT."""
     if not access_token:
         raise HTTPException(status_code= status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
     
@@ -28,6 +29,7 @@ CurrentUser = Annotated[Usuario, Depends(get_current_user)]
 
 
 def require_admin(current_user: CurrentUser) -> Usuario:
+    """Requerís rol ADMIN."""
     user_roles = {r.codigo for r in current_user.roles}
     if RolCodigo.ADMIN not in user_roles:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Se requiere rol ADMIN")
@@ -35,6 +37,7 @@ def require_admin(current_user: CurrentUser) -> Usuario:
 
 
 def require_admin_or_stock(current_user: CurrentUser) -> Usuario:
+    """Requerís rol ADMIN o STOCK."""
     user_roles = {r.codigo for r in current_user.roles}
     if not {RolCodigo.ADMIN, RolCodigo.STOCK}.intersection(user_roles):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Se requiere rol ADMIN o STOCK")
@@ -42,6 +45,7 @@ def require_admin_or_stock(current_user: CurrentUser) -> Usuario:
 
 
 def require_admin_or_pedidos(current_user: CurrentUser) -> Usuario:
+    """Requerís rol ADMIN o PEDIDOS."""
     user_roles = {r.codigo for r in current_user.roles}
     if not {RolCodigo.ADMIN, RolCodigo.PEDIDOS}.intersection(user_roles):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Se requiere rol ADMIN o PEDIDOS")

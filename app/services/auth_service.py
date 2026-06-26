@@ -8,6 +8,7 @@ from app.core.security import hash_password, verify_password, create_access_toke
 class AuthService:
 
     def register(self, data: RegisterRequest) -> tuple[dict, str]:
+        """POST /auth/register — Registra un nuevo usuario."""
         with UnitOfWork() as uow:
             repo = UsuarioRepository(uow.session)
             if repo.get_by_email(data.email):
@@ -28,6 +29,7 @@ class AuthService:
             return usuario_data, token
 
     def login(self, data: LoginRequest) -> tuple[dict, str]:
+        """POST /auth/login — Inicia sesión y devuelve usuario + token."""
         with UnitOfWork() as uow:
             repo = UsuarioRepository(uow.session)
             usuario = repo.get_by_email(data.email)

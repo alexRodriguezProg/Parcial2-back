@@ -9,6 +9,7 @@ class DireccionRepository(BaseRepository[DireccionEntrega]):
         super().__init__(DireccionEntrega, session)
 
     def get_by_usuario(self, usuario_id: int) -> List[DireccionEntrega]:
+        """Devuelve las direcciones activas de un usuario."""
         return self.session.exec(
             select(DireccionEntrega).where(
                 DireccionEntrega.usuario_id == usuario_id,
@@ -17,6 +18,7 @@ class DireccionRepository(BaseRepository[DireccionEntrega]):
         ).all()
 
     def clear_principal(self, usuario_id: int) -> None:
+        """Desmarca todas las direcciones de un usuario como principal."""
         for d in self.get_by_usuario(usuario_id):
             d.es_principal = False
             self.session.add(d)

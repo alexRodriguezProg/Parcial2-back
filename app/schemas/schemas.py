@@ -112,6 +112,16 @@ class IngredienteResponse(BaseModel):
         from_attributes = True
 
 
+class AddIngredienteRequest(BaseModel):
+    ingrediente_id: int
+    cantidad: Optional[float] = None
+
+
+class AddCategoriaRequest(BaseModel):
+    categoria_id: int
+    es_principal: bool = True
+
+
 class ProductoCreate(BaseModel):
     nombre: str
     descripcion: Optional[str] = None
@@ -120,12 +130,15 @@ class ProductoCreate(BaseModel):
     stock_cantidad: int = 0
     disponible: bool = True
     unidad_venta_id: Optional[int] = None
+    categoria_ids: Optional[List[int]] = None
+    ingredientes: Optional[List[AddIngredienteRequest]] = None
 
 
 class ProductoUpdate(BaseModel):
     nombre: Optional[str] = None
     descripcion: Optional[str] = None
     precio_base: Optional[float] = None
+    imagenes_url: Optional[List[str]] = None
     stock_cantidad: Optional[int] = None
     disponible: Optional[bool] = None
     unidad_venta_id: Optional[int] = None
@@ -145,15 +158,11 @@ class ProductoResponse(BaseModel):
     stock_cantidad: int
     disponible: bool
     unidad_venta_id: Optional[int]
+    categorias: List[CategoriaResponse] = []
     ingredientes: List[IngredienteResponse] = []
     created_at: datetime
     class Config:
         from_attributes = True
-
-
-class AddIngredienteRequest(BaseModel):
-    ingrediente_id: int
-    cantidad: Optional[float] = None
 
 
 class DireccionCreate(BaseModel):

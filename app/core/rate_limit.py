@@ -14,6 +14,7 @@ def _limpiar_viejos(ip: str) -> None:
 
 
 def verificar_rate_limit(request: Request) -> None:
+    """Verifica si la IP excedió el límite de intentos fallidos."""
     ip = request.client.host  # type: ignore
     _limpiar_viejos(ip)
     if len(_intentos[ip]) >= MAX_INTENTOS:
@@ -25,10 +26,12 @@ def verificar_rate_limit(request: Request) -> None:
 
 
 def registrar_intento_fallido(request: Request) -> None:
+    """Registra un intento fallido para la IP."""
     ip = request.client.host # type: ignore
     _intentos[ip].append(datetime.utcnow())
 
 
 def limpiar_intentos(request: Request) -> None:
+    """Limpia el historial de intentos fallidos de una IP."""
     ip = request.client.host # type: ignore
     _intentos[ip] = []

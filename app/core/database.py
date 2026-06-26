@@ -10,10 +10,12 @@ engine = create_engine(
 )
 
 
-def create_db_and_tables():
+def create_db_and_tables() -> None:
+    """Crea todas las tablas en la BD si no existen."""
     SQLModel.metadata.create_all(engine)
 
 
 def get_session():
+    """Generador que yield una sesión de BD."""
     with Session(engine) as session:
         yield session

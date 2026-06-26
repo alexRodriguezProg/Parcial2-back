@@ -19,12 +19,14 @@ class WSManager:
         return f"pedido_{pedido_id}"
 
     async def connect(self, ws: WebSocket, canal: str) -> None:
+        """Acepta una conexión WebSocket y la agrega al canal."""
         await ws.accept()
         if canal not in self._connections:
             self._connections[canal] = set()
         self._connections[canal].add(ws)
 
     def disconnect(self, ws: WebSocket, canal: str) -> None:
+        """Desconecta un WebSocket y lo saca del canal."""
         if canal in self._connections:
             self._connections[canal].discard(ws)
             if not self._connections[canal]:
@@ -49,6 +51,7 @@ class WSManager:
         await self._broadcast("admin", evento)
 
     async def broadcast_to_admin(self, evento: dict) -> None:
+        """Broadcast un evento a todos los admin conectados."""
         await self._broadcast("admin", evento)
 
     @staticmethod
@@ -60,6 +63,7 @@ class WSManager:
         usuario_id: int | None = None,
         motivo: str | None = None,
     ) -> dict:
+        """Construye un payload de evento para broadcast."""
         return {
             "event":           event,
             "pedido_id":       pedido_id,

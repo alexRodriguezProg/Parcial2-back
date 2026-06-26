@@ -10,6 +10,7 @@ ENV_FILE_PATH = Path(__file__).resolve().parents[2] / ".env"
 
 
 class Settings(BaseSettings):
+    """Configuración de la aplicación vía variables de entorno."""
     model_config = ConfigDict(
         env_file=str(ENV_FILE_PATH),
         env_file_encoding="utf-8-sig",
@@ -37,6 +38,7 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
+    """Devuelve la instancia singleton de Settings."""
     return Settings()
 
 

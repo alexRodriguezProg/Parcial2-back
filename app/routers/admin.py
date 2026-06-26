@@ -10,6 +10,7 @@ router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
 @router.get("/usuarios", response_model=dict)
 def list_usuarios(_: AdminUser, skip: Annotated[int, Query(ge=0)] = 0, limit: Annotated[int, Query(ge=1, le=100)] = 20, rol_codigo: Annotated[Optional[str], Query()] = None):
+    """GET /admin/usuarios — Lista todos los usuarios (admin)."""
     with UnitOfWork() as uow:
         repo = UsuarioRepository(uow.session)
         usuarios, total = repo.get_all_paginated(skip=skip, limit=limit, rol_codigo=rol_codigo)
@@ -19,6 +20,7 @@ def list_usuarios(_: AdminUser, skip: Annotated[int, Query(ge=0)] = 0, limit: An
 
 @router.get("/usuarios/{usuario_id}", response_model=UsuarioResponse)
 def get_usuario(usuario_id: int, _: AdminUser):
+    """GET /admin/usuarios/{id} — Obtiene un usuario por ID (admin)."""
     with UnitOfWork() as uow:
         usuario = UsuarioRepository(uow.session).get_with_roles(usuario_id)
         if not usuario: raise HTTPException(status_code=404, detail="Usuario no encontrado")
@@ -27,6 +29,7 @@ def get_usuario(usuario_id: int, _: AdminUser):
 
 @router.put("/usuarios/{usuario_id}", response_model=UsuarioResponse)
 def update_usuario(usuario_id: int, data: UsuarioUpdateRequest, _: AdminUser):
+    """PUT /admin/usuarios/{id} — Actualiza un usuario (admin)."""
     with UnitOfWork() as uow:
         repo = UsuarioRepository(uow.session)
         usuario = repo.get_with_roles(usuario_id)
@@ -38,6 +41,7 @@ def update_usuario(usuario_id: int, data: UsuarioUpdateRequest, _: AdminUser):
 
 @router.delete("/usuarios/{usuario_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_usuario(usuario_id: int, _: AdminUser):
+    """DELETE /admin/usuarios/{id} — Elimina un usuario (admin)."""
     with UnitOfWork() as uow:
         repo = UsuarioRepository(uow.session)
         usuario = repo.get_active_by_id(usuario_id)
@@ -47,6 +51,7 @@ def delete_usuario(usuario_id: int, _: AdminUser):
 
 @router.post("/usuarios/{usuario_id}/roles", response_model=UsuarioResponse)
 def asignar_rol(usuario_id: int, data: AsignarRolRequest, _: AdminUser):
+    """POST /admin/usuarios/{id}/roles — Asigna un rol a un usuario (admin)."""
     with UnitOfWork() as uow:
         repo = UsuarioRepository(uow.session)
         usuario = repo.get_with_roles(usuario_id)
@@ -61,6 +66,7 @@ def asignar_rol(usuario_id: int, data: AsignarRolRequest, _: AdminUser):
 
 @router.delete("/usuarios/{usuario_id}/roles/{rol_codigo}", response_model=UsuarioResponse)
 def remover_rol(usuario_id: int, rol_codigo: RolCodigo, _: AdminUser):
+    """DELETE /admin/usuarios/{id}/roles/{codigo} — Remueve un rol de un usuario (admin)."""
     with UnitOfWork() as uow:
         repo = UsuarioRepository(uow.session)
         usuario = repo.get_with_roles(usuario_id)
@@ -75,6 +81,7 @@ def remover_rol(usuario_id: int, rol_codigo: RolCodigo, _: AdminUser):
 
 @router.get("/roles")
 def list_roles(_: AdminUser):
+    """GET /admin/roles — Lista todos los roles disponibles (admin)."""
     with UnitOfWork() as uow:
         roles = UsuarioRepository(uow.session).get_roles()
         return [{"id": r.id, "nombre": r.nombre, "codigo": r.codigo} for r in roles]

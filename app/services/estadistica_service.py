@@ -6,6 +6,7 @@ from app.repositories.unit_of_work import UnitOfWork
 class EstadisticaService:
 
     def get_resumen_kpis(self) -> dict:
+        """Devuelve KPIs: ventas hoy, ticket promedio, pedidos activos, ingresos del mes."""
         with UnitOfWork() as uow:
             session = uow.session
             hoy = date.today()
@@ -51,6 +52,7 @@ class EstadisticaService:
             }
 
     def get_ventas_periodo(self, desde: date, hasta: date, agrupacion: str = "day") -> list:
+        """Devuelve ventas agrupadas por período."""
         if agrupacion not in {"day", "week", "month"}:
             agrupacion = "day"
 
@@ -79,6 +81,7 @@ class EstadisticaService:
             ]
 
     def get_productos_top(self, limit: int = 10) -> list:
+        """Devuelve el top de productos por ingresos."""
         with UnitOfWork() as uow:
             rows = uow.session.exec(text("""
                 SELECT
@@ -103,6 +106,7 @@ class EstadisticaService:
             ]
 
     def get_pedidos_por_estado(self) -> list:
+        """Devuelve la cantidad de pedidos agrupados por estado."""
         with UnitOfWork() as uow:
             rows = uow.session.exec(text("""
                 SELECT estado_codigo, COUNT(*) AS cantidad
@@ -118,6 +122,7 @@ class EstadisticaService:
             ]
 
     def get_ingresos_por_forma_pago(self, desde: date, hasta: date) -> list:
+        """Devuelve ingresos agrupados por forma de pago en un período."""
         with UnitOfWork() as uow:
             rows = uow.session.exec(text("""
                 SELECT

@@ -18,6 +18,7 @@ def _init_cloudinary():
 class UploadService:
 
     async def upload_imagen(self, file: UploadFile, folder: str = "foodstore/productos") -> dict:
+        """Sube una imagen a Cloudinary y devuelve su URL."""
         if file.content_type not in ALLOWED_MIME_TYPES:
             raise HTTPException(
                 status_code=400,
@@ -55,6 +56,7 @@ class UploadService:
         }
 
     def delete_imagen(self, public_id: str) -> None:
+        """Elimina una imagen de Cloudinary por su public_id."""
         _init_cloudinary()
         try:
             resultado = cloudinary.uploader.destroy(public_id, resource_type="image")

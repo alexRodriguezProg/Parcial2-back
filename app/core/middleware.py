@@ -1,12 +1,14 @@
 import time
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 from app.core.logging_config import logger
 
 
 class TimingLoggingMiddleware(BaseHTTPMiddleware):
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next) -> Response:
+        """Middleware que logea método, path, status, tiempo y IP."""
         start_time = time.perf_counter()
         ip = request.client.host if request.client else "unknown"
 

@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from app.repositories import PedidoRepository, ProductoRepository, UnitOfWork
 from app.models import (
     Pedido, DetallePedido, HistorialEstadoPedido,
-    EstadoPedidoCodigo, RolCodigo, FormaPago,
+    EstadoPedidoCodigo, RolCodigo, FormaPago, Usuario,
 )
 from app.schemas.schemas import (
     CrearPedidoRequest, AvanzarEstadoRequest,
@@ -26,7 +26,8 @@ FSM: dict[EstadoPedidoCodigo, set[EstadoPedidoCodigo]] = {
 
 class PedidoService:
 
-    def get_all(self, current_user, skip=0, limit=20, estado_codigo=None):
+    def get_all(self, current_user: Usuario, skip=0, limit=20, estado_codigo=None, search=None) -> tuple:
+        """Devuelve pedidos con filtros opcionales."""
         with UnitOfWork() as uow:
             repo = PedidoRepository(uow.session)
             user_roles = {r.codigo for r in current_user.roles}
@@ -39,6 +40,7 @@ class PedidoService:
                 skip=skip, limit=limit,
                 usuario_id=usuario_id,
                 estado_codigo=estado_codigo,
+                search=search,
             )
             for p in pedidos:
                 _ = p.estado
@@ -46,7 +48,8 @@ class PedidoService:
             items = [PedidoListResponse.model_validate(p).model_dump() for p in pedidos]
             return total, items
 
-    def get_by_id(self, pedido_id: int, current_user):
+    def get_by_id(self, pedido_id: int, current_user: Usuario) -> dict:
+        """Devuelve un pedido con detalles e historial."""
         with UnitOfWork() as uow:
             repo = PedidoRepository(uow.session)
             pedido = repo.get_with_detalles(pedido_id)
@@ -58,7 +61,8 @@ class PedidoService:
                     raise HTTPException(status_code=403, detail="No autorizado")
             return PedidoResponse.model_validate(pedido).model_dump()
 
-    def crear_pedido(self, data: CrearPedidoRequest, current_user):
+    def crear_pedido(self, data: CrearPedidoRequest, current_user: Usuario) -> dict:
+        """Crea un pedido nuevo con sus detalles."""
         with UnitOfWork() as uow:
             pedido_repo   = PedidoRepository(uow.session)
             producto_repo = ProductoRepository(uow.session)
@@ -98,6 +102,7 @@ class PedidoService:
                     "personalizacion": item.personalizacion, # type: ignore
                 })
                 producto.stock_cantidad -= item.cantidad
+                producto.disponible = producto.stock_cantidad > 0
                 uow.session.add(producto)
 
             descuento   = 0.0
@@ -137,7 +142,8 @@ class PedidoService:
 
         return result
 
-    async def avanzar_estado(self, pedido_id: int, data: AvanzarEstadoRequest, current_user):
+    async def avanzar_estado(self, pedido_id: int, data: AvanzarEstadoRequest, current_user: Usuario) -> dict:
+        """Avanza el estado de un pedido validando la FSM."""
         estado_anterior_codigo = None
 
         with UnitOfWork() as uow:
@@ -223,12 +229,14 @@ class PedidoService:
 
         return result
 
-    def get_estados(self):
+    def get_estados(self) -> list:
+        """Devuelve todos los estados de pedido disponibles."""
         with UnitOfWork() as uow:
             estados = PedidoRepository(uow.session).get_all_estados()
             return [EstadoPedidoResponse.model_validate(e).model_dump() for e in estados]
 
-    def get_formas_pago(self):
+    def get_formas_pago(self) -> list:
+        """Devuelve todas las formas de pago habilitadas."""
         with UnitOfWork() as uow:
             formas = PedidoRepository(uow.session).get_all_formas_pago()
             return [FormaPagoResponse.model_validate(f).model_dump() for f in formas]

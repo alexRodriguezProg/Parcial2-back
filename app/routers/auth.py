@@ -17,6 +17,7 @@ service = AuthService()
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 def register(data: RegisterRequest, response: Response, request: Request):
+    """POST /auth/register — Registra un nuevo usuario."""
     verificar_rate_limit(request)
     try:
         usuario_data, token = service.register(data)
@@ -34,6 +35,7 @@ def register(data: RegisterRequest, response: Response, request: Request):
 
 @router.post("/login")
 def login(data: LoginRequest, response: Response, request: Request):
+    """POST /auth/login — Autentica un usuario existente."""
     verificar_rate_limit(request)
     try:
         usuario_data, token = service.login(data)
@@ -51,12 +53,14 @@ def login(data: LoginRequest, response: Response, request: Request):
 
 @router.post("/logout")
 def logout(response: Response):
+    """POST /auth/logout — Cierra la sesión del usuario."""
     response.delete_cookie("access_token")
     return {"message": "Sesión cerrada"}
 
 
 @router.get("/me")
 def get_me(current_user: CurrentUser, session: Session = Depends(get_session)):
+    """GET /auth/me — Devuelve los datos del usuario autenticado."""
     from app.repositories import UsuarioRepository
     repo    = UsuarioRepository(session)
     usuario = repo.get_with_roles(current_user.id)  # type: ignore

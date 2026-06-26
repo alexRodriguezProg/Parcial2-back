@@ -9,18 +9,21 @@ class UsuarioRepository(BaseRepository[Usuario]):
         super().__init__(Usuario, session)
 
     def get_by_email(self, email: str) -> Optional[Usuario]:
+        """Devuelve un usuario activo por email."""
         return self.session.exec(
             select(Usuario).where(Usuario.email == email, Usuario.deleted_at == None)
         ).first()
 
     def get_with_roles(self, usuario_id: int) -> Optional[Usuario]:
+        """Devuelve un usuario con sus roles cargados."""
         usuario = self.session.get(Usuario, usuario_id)
         if usuario and usuario.deleted_at is None:
             _ = usuario.roles
             return usuario
         return None
 
-    def get_all_paginated(self, skip=0, limit=20, rol_codigo=None):
+    def get_all_paginated(self, skip=0, limit=20, rol_codigo=None) -> tuple:
+        """Devuelve usuarios con paginación y filtro opcional por rol."""
         statement = select(Usuario).where(Usuario.deleted_at == None)
         if rol_codigo:
             statement = (
@@ -33,6 +36,7 @@ class UsuarioRepository(BaseRepository[Usuario]):
         return usuarios, total
 
     def assign_role(self, usuario_id: int, rol_codigo: RolCodigo) -> None:
+        """Asigna un rol a un usuario."""
         existing = self.session.exec(
             select(UsuarioRol).where(
                 UsuarioRol.usuario_id == usuario_id,
@@ -44,6 +48,7 @@ class UsuarioRepository(BaseRepository[Usuario]):
             self.session.flush()
 
     def remove_role(self, usuario_id: int, rol_codigo: RolCodigo) -> None:
+        """Saca un rol a un usuario."""
         existing = self.session.exec(
             select(UsuarioRol).where(
                 UsuarioRol.usuario_id == usuario_id,
@@ -55,7 +60,9 @@ class UsuarioRepository(BaseRepository[Usuario]):
             self.session.flush()
 
     def get_roles(self) -> List[Rol]:
+        """Devuelve todos los roles disponibles."""
         return self.session.exec(select(Rol)).all()
 
     def get_rol_by_codigo(self, codigo: RolCodigo) -> Optional[Rol]:
+        """Devuelve un rol por su código."""
         return self.session.exec(select(Rol).where(Rol.codigo == codigo)).first()

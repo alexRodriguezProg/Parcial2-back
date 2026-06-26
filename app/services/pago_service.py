@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from sqlmodel import select
 from app.core.config import settings
 from app.core.ws_manager import ws_manager
-from app.models import Pago, Pedido, EstadoPedidoCodigo, HistorialEstadoPedido, RolCodigo
+from app.models import Pago, Pedido, EstadoPedidoCodigo, HistorialEstadoPedido, RolCodigo, Usuario
 from app.repositories import PedidoRepository, UnitOfWork
 
 MP_API_BASE = "https://api.mercadopago.com"
@@ -43,7 +43,8 @@ def _crear_preferencia_mp(preference_data: dict) -> dict:
 
 class PagoService:
 
-    def crear_pago(self, pedido_id: int, current_user) -> dict:
+    def crear_pago(self, pedido_id: int, current_user: Usuario) -> dict:
+        """Crea una preferencia de pago en MercadoPago para un pedido."""
         with UnitOfWork() as uow:
             repo   = PedidoRepository(uow.session)
             pedido = repo.get_with_detalles(pedido_id)
@@ -77,15 +78,22 @@ class PagoService:
                     }
                     for d in pedido.detalles
                 ],
-                "auto_return":        "approved",
+                "payer": {
+                    "email":   current_user.email,
+                    "name":    current_user.nombre,
+                    "surname": current_user.apellido,
+                },
+                "auto_return":        "all",
                 "external_reference": external_reference,
-                "notification_url":   settings.MP_NOTIFICATION_URL,
+                "binary_mode":        True,
                 "back_urls": {
-                    "success": f"https://localhost:5173/pedidos/{pedido_id}?status=approved",
-                    "failure": f"https://localhost:5173/pedidos/{pedido_id}?status=rejected",
-                    "pending": f"https://localhost:5173/pedidos/{pedido_id}?status=pending",
+                    "success": f"{settings.FRONTEND_STORE_URL}/pedidos/{pedido_id}",
+                    "failure": f"{settings.FRONTEND_STORE_URL}/pedidos/{pedido_id}",
+                    "pending": f"{settings.FRONTEND_STORE_URL}/pedidos/{pedido_id}",
                 },
             }
+            if settings.MP_NOTIFICATION_URL:
+                preference_data["notification_url"] = settings.MP_NOTIFICATION_URL
 
             preference = _crear_preferencia_mp(preference_data)
 
@@ -110,6 +118,7 @@ class PagoService:
             }
 
     async def procesar_webhook(self, topic: str, resource_id: str) -> dict:
+        """Procesa el webhook IPN de MercadoPago."""
         if topic != "payment":
             return {"status": "ok", "detail": "topic ignorado"}
 
@@ -171,7 +180,92 @@ class PagoService:
 
         return {"status": "ok"}
 
-    def get_pago_by_pedido(self, pedido_id: int, current_user) -> dict:
+    def verify_pago(self, pedido_id: int, mp_payment_id: str, current_user: Usuario) -> dict:
+        """Verifica el estado de un pago contra MercadoPago."""
+        broadcast_info = None
+        with UnitOfWork() as uow:
+            repo = PedidoRepository(uow.session)
+            pedido = repo.get_active_by_id(pedido_id)
+            if not pedido:
+                raise HTTPException(status_code=404, detail="Pedido no encontrado")
+            if pedido.usuario_id != current_user.id:
+                raise HTTPException(status_code=403, detail="No autorizado")
+
+            pago = uow.session.exec(
+                select(Pago).where(Pago.pedido_id == pedido_id)
+            ).first()
+            if not pago:
+                raise HTTPException(status_code=404, detail="Pago no encontrado")
+
+            # Idempotencia: si ya se procesó este payment, devolvé el estado actual
+            if pago.mp_payment_id == mp_payment_id and pago.mp_status == "approved":
+                return {
+                    "status": "approved",
+                    "pedido_estado": pedido.estado_codigo.value,
+                    "detail": "already_verified",
+                    "_broadcast": None,
+                }
+
+            sdk = _get_sdk()
+            response = sdk.payment().get(mp_payment_id)
+            if response["status"] != 200:
+                raise HTTPException(status_code=502, detail="Error al consultar pago en MercadoPago")
+
+            mp_data = response["response"]
+            mp_status = mp_data.get("status", "")
+
+            pago.mp_payment_id = mp_payment_id
+            pago.mp_status = mp_status
+            pago.mp_status_detail = mp_data.get("status_detail", "")
+            pago.transaction_amount = float(mp_data.get("transaction_amount", 0))
+            pago.payment_method_id = mp_data.get("payment_method_id", "")
+            uow.session.add(pago)
+
+            if mp_status == "approved" and pedido.estado_codigo == EstadoPedidoCodigo.PENDIENTE:
+                pedido.estado_codigo = EstadoPedidoCodigo.CONFIRMADO
+                uow.session.add(pedido)
+                uow.session.flush()
+                repo.append_historial(HistorialEstadoPedido(
+                    pedido_id=pedido.id,
+                    estado_desde=EstadoPedidoCodigo.PENDIENTE,
+                    estado_hacia=EstadoPedidoCodigo.CONFIRMADO,
+                    usuario_id=None,
+                    motivo="Pago aprobado por MercadoPago (verificación post-pago)",
+                ))
+                broadcast_info = {
+                    "pedido_id": pedido.id,
+                    "event": "pago_verificado",
+                    "estado_anterior": EstadoPedidoCodigo.PENDIENTE.value,
+                    "estado_nuevo": EstadoPedidoCodigo.CONFIRMADO.value,
+                    "motivo": "Pago aprobado por MercadoPago",
+                }
+            elif mp_status in ("rejected", "cancelled", "refunded", "charged_back") and pedido.estado_codigo == EstadoPedidoCodigo.PENDIENTE:
+                pedido.estado_codigo = EstadoPedidoCodigo.CANCELADO
+                uow.session.add(pedido)
+                uow.session.flush()
+                repo.append_historial(HistorialEstadoPedido(
+                    pedido_id=pedido.id,
+                    estado_desde=EstadoPedidoCodigo.PENDIENTE,
+                    estado_hacia=EstadoPedidoCodigo.CANCELADO,
+                    usuario_id=None,
+                    motivo=f"Pago {mp_status} por MercadoPago (verificación post-pago)",
+                ))
+                broadcast_info = {
+                    "pedido_id": pedido.id,
+                    "event": "pago_verificado",
+                    "estado_anterior": EstadoPedidoCodigo.PENDIENTE.value,
+                    "estado_nuevo": EstadoPedidoCodigo.CANCELADO.value,
+                    "motivo": f"Pago {mp_status} por MercadoPago",
+                }
+
+            return {
+                "status": mp_status,
+                "pedido_estado": pedido.estado_codigo.value,
+                "_broadcast": broadcast_info,
+            }
+
+    def get_pago_by_pedido(self, pedido_id: int, current_user: Usuario) -> dict:
+        """Devuelve los datos del pago asociado a un pedido."""
         with UnitOfWork() as uow:
             repo   = PedidoRepository(uow.session)
             pedido = repo.get_with_detalles(pedido_id)

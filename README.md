@@ -21,7 +21,7 @@ API REST + WebSocket del sistema Food Store, desarrollado con FastAPI + SQLModel
 
 ```bash
 git clone <repo-url>
-cd Global-back
+cd Parcial2-back
 python -m venv .venv
 .venv\Scripts\activate      # Windows
 pip install -r requirements.txt
@@ -38,12 +38,17 @@ Editá `.env` con tus credenciales:
 | Variable | Descripción |
 |----------|-------------|
 | `DATABASE_URL` | Conexión a PostgreSQL (`postgresql://user:pass@localhost:5432/foodstore_db`) |
-| `SECRET_KEY` | Clave para firmar JWT |
-| `JWT_EXPIRATION_MINUTES` | Minutos de validez del token (ej. `60`) |
-| `MP_ACCESS_TOKEN` | Access Token de Mercado Pago (producción) |
-| `MP_NOTIFICATION_URL` | URL de webhook para notificaciones MP |
+| `SECRET_KEY` | Clave para firmar JWT (mín. 32 caracteres) |
+| `ALGORITHM` | Algoritmo JWT (`HS256`) |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Minutos de validez del token (ej. `60`) |
+| `FRONTEND_STORE_URL` | URL del frontend store (con HTTPS: `https://localhost:5173`) |
+| `FRONTEND_ADMIN_URL` | URL del frontend admin (`http://localhost:5174`) |
+| `MP_ACCESS_TOKEN` | Access Token de Mercado Pago |
 | `MP_PUBLIC_KEY` | Public Key de Mercado Pago |
-| `CLOUDINARY_URL` | URL de Cloudinary para imágenes |
+| `MP_NOTIFICATION_URL` | Webhook público (ngrok) para notificaciones IPN de MP |
+| `CLOUDINARY_CLOUD_NAME` | Cloud name de Cloudinary |
+| `CLOUDINARY_API_KEY` | API Key de Cloudinary |
+| `CLOUDINARY_API_SECRET` | API Secret de Cloudinary |
 
 ### 3. Crear la base de datos
 
@@ -57,7 +62,7 @@ CREATE DATABASE foodstore_db;
 python -m app.seed
 ```
 
-Carga: roles (admin, cliente), estados de pedido (pendiente, confirmado, preparando, enviado, entregado, cancelado), formas de pago (efectivo, mercadopago), 6 productos con ingredientes y 2 categorías.
+Carga: roles (admin, cliente, stock, pedidos), estados de pedido (pendiente, confirmado, preparando, enviado, entregado, cancelado), formas de pago (efectivo, mercadopago, transferencia), 6 productos con ingredientes y 2 categorías.
 
 ### 5. Correr el servidor
 
@@ -88,20 +93,23 @@ La autenticación usa **cookies HttpOnly** con JWT. El frontend debe enviar `wit
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| GET | `/productos/` | Listar productos (filtros: `categoria_id`, `disponible`, `q`) |
+| GET | `/productos/` | Listar productos (filtros: `categoria_id`, `disponible`, `search`) |
 | GET | `/productos/{id}` | Detalle de producto con ingredientes |
 | POST | `/productos/` | Crear producto |
 | PUT | `/productos/{id}` | Actualizar producto |
 | PATCH | `/productos/{id}/disponibilidad` | Cambiar disponibilidad |
+| PATCH | `/productos/{id}/imagenes` | Actualizar imágenes (recibe `imagenes_url: string[]`) |
 | DELETE | `/productos/{id}` | Eliminar producto |
 | POST | `/productos/{id}/ingredientes` | Asignar ingrediente |
 | DELETE | `/productos/{id}/ingredientes/{ing_id}` | Quitar ingrediente |
+| POST | `/productos/{id}/categorias` | Asignar categoría |
+| DELETE | `/productos/{id}/categorias/{cat_id}` | Quitar categoría |
 
 ### Categorías — `/api/v1/categorias`
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| GET | `/categorias/` | Árbol de categorías (jerárquico) |
+| GET | `/categorias/` | Listar categorías (filtros: `parent_id`, `include_subcategorias`) |
 | GET | `/categorias/flat` | Lista plana de categorías |
 | GET | `/categorias/{id}` | Detalle |
 | POST | `/categorias/` | Crear |
@@ -122,7 +130,7 @@ La autenticación usa **cookies HttpOnly** con JWT. El frontend debe enviar `wit
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| GET | `/pedidos/` | Listar pedidos del usuario autenticado |
+| GET | `/pedidos/` | Listar pedidos (filtros: `skip`, `limit`, `estado_codigo`, `search`) |
 | GET | `/pedidos/{id}` | Detalle del pedido con historial |
 | POST | `/pedidos/` | Crear pedido (recibe `items` + `forma_pago_codigo`) |
 | PATCH | `/pedidos/{id}/estado` | Cambiar estado del pedido |
@@ -135,7 +143,8 @@ La autenticación usa **cookies HttpOnly** con JWT. El frontend debe enviar `wit
 | Método | Ruta | Descripción |
 |--------|------|-------------|
 | POST | `/pagos/crear/{id}` | Crear preferencia de pago en Mercado Pago |
-| POST | `/pagos/webhook` | Webhook de notificaciones MP |
+| POST | `/pagos/webhook` | Webhook IPN de notificaciones MP |
+| POST | `/pagos/verify/{pedido_id}` | Verificación post-pago (fallback si no llegó el webhook) |
 | GET | `/pagos/{id}` | Estado del pago |
 
 ### Direcciones — `/api/v1/direcciones`
@@ -153,7 +162,7 @@ La autenticación usa **cookies HttpOnly** con JWT. El frontend debe enviar `wit
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| GET | `/admin/usuarios` | Listar usuarios |
+| GET | `/admin/usuarios` | Listar usuarios (filtros: `skip`, `limit`, `rol_codigo`) |
 | GET | `/admin/usuarios/{id}` | Detalle de usuario |
 | PUT | `/admin/usuarios/{id}` | Actualizar usuario |
 | DELETE | `/admin/usuarios/{id}` | Eliminar usuario |
@@ -165,13 +174,18 @@ La autenticación usa **cookies HttpOnly** con JWT. El frontend debe enviar `wit
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| POST | `/uploads/` | Subir imagen a Cloudinary |
+| POST | `/uploads/imagen` | Subir imagen a Cloudinary (multipart, solo ADMIN) |
+| DELETE | `/uploads/imagen/{public_id}` | Eliminar imagen de Cloudinary por public_id (solo ADMIN) |
 
 ### Estadísticas — `/api/v1/estadisticas`
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| GET | `/estadisticas/` | Dashboard del admin |
+| GET | `/estadisticas/resumen` | KPIs: ventas hoy, ticket promedio, pedidos activos, ingresos del mes |
+| GET | `/estadisticas/ventas` | Ventas por período (`desde`, `hasta`, `agrupacion: day/week/month`) |
+| GET | `/estadisticas/productos-top` | Top productos por ingresos |
+| GET | `/estadisticas/pedidos-por-estado` | Cantidad de pedidos por estado actual |
+| GET | `/estadisticas/ingresos` | Ingresos por forma de pago (solo pagos approved) |
 
 ---
 
@@ -180,7 +194,7 @@ La autenticación usa **cookies HttpOnly** con JWT. El frontend debe enviar `wit
 | Ruta | Descripción |
 |------|-------------|
 | `/ws/pedidos/{id}?token={jwt}` | Tracking en tiempo real de un pedido específico |
-| `/ws/admin/pedidos?token={jwt}` | Escucha global de todos los pedidos (admin) |
+| `/ws/admin/pedidos?token={jwt}` | Escucha global de todos los pedidos (admin / pedidos) |
 
 - Autenticación vía token JWT en query param.
 - El frontend se conecta **directamente** a `ws://localhost:8000` (no pasa por el proxy de Vite).
@@ -192,7 +206,36 @@ La autenticación usa **cookies HttpOnly** con JWT. El frontend debe enviar `wit
 
 - La preferencia de pago se crea con `requests.post` directo a la API de MP (no se usa el SDK oficial por un bug con `auto_return`).
 - `back_urls` usan HTTPS obligatoriamente (`https://localhost:5173/pedidos/{id}`).
-- `auto_return: "approved"` redirige automáticamente al frontend cuando el pago se aprueba.
+- `auto_return: "all"` redirige automáticamente al frontend cuando el pago se aprueba o rechaza.
+- `binary_mode: True` fuerza estados `approved` / `rejected` sin estados intermedios.
+
+### Flujo de pago
+
+1. El frontend llama a `POST /pagos/crear/{pedido_id}` → recibe `init_point`.
+2. Redirige al usuario a MP.
+3. MP redirige al frontend vía `back_urls.success`.
+4. El frontend llama a `POST /pagos/verify/{pedido_id}` con el `mp_payment_id` que MP envía en la URL.
+5. El backend consulta MP, actualiza el estado del pedido y hace broadcast por WebSocket (`pago_verificado`).
+6. Como respaldo, el webhook IPN (`POST /pagos/webhook`) también procesa el pago si el verify falla.
+
+### ngrok — Túnel para notificaciones IPN
+
+MP necesita una URL pública para enviar notificaciones de pago. En desarrollo local se usa **ngrok**:
+
+```bash
+# 1. Instalar ngrok
+winget install ngrok
+
+# 2. Configurar authtoken (sacarlo de https://dashboard.ngrok.com)
+ngrok config add-authtoken <tu-token>
+
+# 3. Iniciar túnel
+ngrok http http://localhost:8000
+
+# 4. Copiar la URL generada (ej: https://xxxx.ngrok-free.dev)
+# 5. Setear en .env:
+MP_NOTIFICATION_URL=https://xxxx.ngrok-free.dev/api/v1/pagos/webhook
+```
 
 ---
 
@@ -212,3 +255,9 @@ Requiere base de datos de test configurada.
 |-----|-------|------------|
 | Admin | `admin@foodstore.com` | `Admin1234!` |
 | Cliente | `cliente@foodstore.com` | `Cliente1234!` |
+
+---
+
+## Documentación del código
+
+Todas las funciones de routers, services y core tienen docstrings en español documentando su propósito.

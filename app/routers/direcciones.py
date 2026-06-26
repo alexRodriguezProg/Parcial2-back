@@ -9,29 +9,35 @@ service = DireccionService()
 
 @router.get("/", response_model=list[DireccionResponse])
 def list_direcciones(current_user: CurrentUser):
+    """GET /direcciones — Lista las direcciones del usuario."""
     return service.get_all(current_user.id) # type: ignore
 
 
 @router.get("/{direccion_id}", response_model=DireccionResponse)
 def get_direccion(direccion_id: int, current_user: CurrentUser):
+    """GET /direcciones/{id} — Obtiene una dirección por ID."""
     return service.get_by_id(direccion_id, current_user.id) # type: ignore
 
 
 @router.post("/", response_model=DireccionResponse, status_code=status.HTTP_201_CREATED)
 def create_direccion(data: DireccionCreate, current_user: CurrentUser):
+    """POST /direcciones — Crea una nueva dirección."""
     return service.create(data, current_user.id) # type: ignore
 
 
 @router.put("/{direccion_id}", response_model=DireccionResponse)
 def update_direccion(direccion_id: int, data: DireccionUpdate, current_user: CurrentUser):
+    """PUT /direcciones/{id} — Actualiza una dirección existente."""
     return service.update(direccion_id, data, current_user.id) # type: ignore
 
 
 @router.patch("/{direccion_id}/principal", response_model=DireccionResponse)
 def set_principal(direccion_id: int, current_user: CurrentUser):
+    """PATCH /direcciones/{id}/principal — Marca una dirección como principal."""
     return service.set_principal(direccion_id, current_user.id) # type: ignore
 
 
 @router.delete("/{direccion_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_direccion(direccion_id: int, current_user: CurrentUser):
+    """DELETE /direcciones/{id} — Elimina una dirección."""
     service.delete(direccion_id, current_user.id) # type: ignore

@@ -155,6 +155,14 @@ class Producto(SQLModel, table=True):
     productos_ingrediente: List["ProductoIngrediente"]  = Relationship(back_populates="producto")
     detalles_pedido:       List["DetallePedido"]        = Relationship(back_populates="producto")
 
+    @property
+    def categorias(self) -> List["Categoria"]:
+        return [pc.categoria for pc in self.productos_categoria if pc.categoria is not None]
+
+    @property
+    def ingredientes(self) -> List["Ingrediente"]:
+        return [pi.ingrediente for pi in self.productos_ingrediente if pi.ingrediente is not None]
+
 
 class ProductoCategoria(SQLModel, table=True):
     __tablename__ = "producto_categoria" # type: ignore
@@ -274,7 +282,7 @@ class Pago(SQLModel, table=True):
     __tablename__ = "pago" # type: ignore
     id:                 Optional[int] = Field(default=None, primary_key=True)
     pedido_id:          int           = Field(foreign_key="pedido.id")
-    mp_payment_id:      Optional[int] = Field(default=None, unique=True)
+    mp_payment_id:      Optional[str] = Field(default=None, max_length=50, unique=True)
     mp_status:          str           = Field(max_length=30)
     mp_status_detail:   Optional[str] = Field(default=None, max_length=100)
     external_reference: str           = Field(unique=True, max_length=100)

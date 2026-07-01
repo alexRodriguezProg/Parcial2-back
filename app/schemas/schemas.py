@@ -1,6 +1,6 @@
 from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from app.models.models import RolCodigo, EstadoPedidoCodigo, FormaPagoCodigo
 
 
@@ -94,12 +94,14 @@ class IngredienteCreate(BaseModel):
     nombre: str
     descripcion: Optional[str] = None
     es_alergeno: bool = False
+    stock_cantidad: int = Field(default=0, ge=0)
 
 
 class IngredienteUpdate(BaseModel):
     nombre: Optional[str] = None
     descripcion: Optional[str] = None
     es_alergeno: Optional[bool] = None
+    stock_cantidad: Optional[int] = Field(default=None, ge=0)
 
 
 class IngredienteResponse(BaseModel):
@@ -107,14 +109,35 @@ class IngredienteResponse(BaseModel):
     nombre: str
     descripcion: Optional[str]
     es_alergeno: bool
+    stock_cantidad: int
     created_at: datetime
+    class Config:
+        from_attributes = True
+
+
+class ProductoIngredienteResponse(BaseModel):
+    id: int
+    nombre: str
+    descripcion: Optional[str]
+    es_alergeno: bool
+    stock_cantidad: int
+    cantidad: Optional[float] = None
+    class Config:
+        from_attributes = True
+
+
+class UnidadMedidaResponse(BaseModel):
+    id: int
+    nombre: str
+    simbolo: str
+    tipo: str
     class Config:
         from_attributes = True
 
 
 class AddIngredienteRequest(BaseModel):
     ingrediente_id: int
-    cantidad: Optional[float] = None
+    cantidad: float = Field(gt=0)
 
 
 class AddCategoriaRequest(BaseModel):
@@ -127,7 +150,6 @@ class ProductoCreate(BaseModel):
     descripcion: Optional[str] = None
     precio_base: float
     imagenes_url: Optional[List[str]] = None
-    stock_cantidad: int = 0
     disponible: bool = True
     unidad_venta_id: Optional[int] = None
     categoria_ids: Optional[List[int]] = None
@@ -139,7 +161,6 @@ class ProductoUpdate(BaseModel):
     descripcion: Optional[str] = None
     precio_base: Optional[float] = None
     imagenes_url: Optional[List[str]] = None
-    stock_cantidad: Optional[int] = None
     disponible: Optional[bool] = None
     unidad_venta_id: Optional[int] = None
 
@@ -159,7 +180,7 @@ class ProductoResponse(BaseModel):
     disponible: bool
     unidad_venta_id: Optional[int]
     categorias: List[CategoriaResponse] = []
-    ingredientes: List[IngredienteResponse] = []
+    ingredientes: List[ProductoIngredienteResponse] = []
     created_at: datetime
     class Config:
         from_attributes = True

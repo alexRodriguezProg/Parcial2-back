@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from sqlmodel import select
 from app.core.config import settings
 from app.core.ws_manager import ws_manager
-from app.models import Pago, Pedido, EstadoPedidoCodigo, HistorialEstadoPedido, RolCodigo, Usuario
+from app.models import Pago, Pedido, EstadoPedidoCodigo, HistorialEstadoPedido, RolCodigo, Usuario, Producto, Ingrediente
 from app.repositories import PedidoRepository, UnitOfWork
 
 MP_API_BASE = "https://api.mercadopago.com"
@@ -167,6 +167,39 @@ class PagoService:
                     ))
                     pedido_id_ws = pedido.id
 
+            elif mp_status in ("rejected", "cancelled", "refunded", "charged_back"):
+                repo = PedidoRepository(uow.session)
+                pedido = repo.get_with_detalles(pago.pedido_id)
+                if pedido and pedido.estado_codigo == EstadoPedidoCodigo.PENDIENTE:
+                    # Restaurar stock de producto e ingredientes
+                    for detalle in pedido.detalles:
+                        producto = uow.session.get(Producto, detalle.producto_id)
+                        if producto:
+                            producto.stock_cantidad += detalle.cantidad
+                            producto.disponible = True
+                            uow.session.add(producto)
+                            # Restaurar stock de ingredientes
+                            _ = producto.productos_ingrediente
+                            for pi in producto.productos_ingrediente:
+                                if pi.ingrediente is None:
+                                    continue
+                                ingrediente = uow.session.get(Ingrediente, pi.ingrediente_id)
+                                if ingrediente:
+                                    ingrediente.stock_cantidad += pi.cantidad * detalle.cantidad
+                                    uow.session.add(ingrediente)
+
+                    pedido.estado_codigo = EstadoPedidoCodigo.CANCELADO
+                    uow.session.add(pedido)
+                    uow.session.flush()
+                    repo.append_historial(HistorialEstadoPedido(
+                        pedido_id=pedido.id,  # type: ignore
+                        estado_desde=EstadoPedidoCodigo.PENDIENTE,
+                        estado_hacia=EstadoPedidoCodigo.CANCELADO,
+                        usuario_id=None,
+                        motivo=f"Pago {mp_status} por MercadoPago",
+                    ))
+                    pedido_id_ws = pedido.id
+
         # RN-06: broadcast FUERA del UoW
         if mp_status == "approved" and pedido_id_ws:
             evento = ws_manager.build_evento(
@@ -175,6 +208,16 @@ class PagoService:
                 estado_nuevo=EstadoPedidoCodigo.CONFIRMADO,
                 estado_anterior=EstadoPedidoCodigo.PENDIENTE,
                 usuario_id=None,
+            )
+            await ws_manager.broadcast_pedido(pedido_id_ws, evento)
+        elif mp_status in ("rejected", "cancelled", "refunded", "charged_back") and pedido_id_ws:
+            evento = ws_manager.build_evento(
+                event="pedido_cancelado",
+                pedido_id=pedido_id_ws,
+                estado_nuevo=EstadoPedidoCodigo.CANCELADO,
+                estado_anterior=EstadoPedidoCodigo.PENDIENTE,
+                usuario_id=None,
+                motivo=f"Pago {mp_status} por MercadoPago",
             )
             await ws_manager.broadcast_pedido(pedido_id_ws, evento)
 
@@ -240,6 +283,26 @@ class PagoService:
                     "motivo": "Pago aprobado por MercadoPago",
                 }
             elif mp_status in ("rejected", "cancelled", "refunded", "charged_back") and pedido.estado_codigo == EstadoPedidoCodigo.PENDIENTE:
+                # Restaurar stock de producto e ingredientes antes de cancelar
+                repo_detalle = PedidoRepository(uow.session)
+                pedido_con_detalles = repo_detalle.get_with_detalles(pedido.id)
+                if pedido_con_detalles:
+                    for detalle in pedido_con_detalles.detalles:
+                        producto = uow.session.get(Producto, detalle.producto_id)
+                        if producto:
+                            producto.stock_cantidad += detalle.cantidad
+                            producto.disponible = True
+                            uow.session.add(producto)
+                            # Restaurar stock de ingredientes
+                            _ = producto.productos_ingrediente
+                            for pi in producto.productos_ingrediente:
+                                if pi.ingrediente is None:
+                                    continue
+                                ingrediente = uow.session.get(Ingrediente, pi.ingrediente_id)
+                                if ingrediente:
+                                    ingrediente.stock_cantidad += pi.cantidad * detalle.cantidad
+                                    uow.session.add(ingrediente)
+
                 pedido.estado_codigo = EstadoPedidoCodigo.CANCELADO
                 uow.session.add(pedido)
                 uow.session.flush()

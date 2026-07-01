@@ -7,8 +7,31 @@ from app.schemas.schemas import (
     ProductoCreate, ProductoUpdate, ProductoDisponibilidadUpdate,
     IngredienteCreate, IngredienteUpdate, AddIngredienteRequest,
     AddCategoriaRequest,
-    ProductoResponse, IngredienteResponse
+    ProductoResponse, IngredienteResponse, ProductoIngredienteResponse
 )
+
+
+def _serialize_ingredientes(producto: Producto) -> list[dict]:
+    """Serializa ingredientes de un producto incluyendo la cantidad desde ProductoIngrediente."""
+    return [
+        ProductoIngredienteResponse(
+            id=pi.ingrediente.id,
+            nombre=pi.ingrediente.nombre,
+            descripcion=pi.ingrediente.descripcion,
+            es_alergeno=pi.ingrediente.es_alergeno,
+            stock_cantidad=pi.ingrediente.stock_cantidad,
+            cantidad=pi.cantidad,
+        ).model_dump()
+        for pi in producto.productos_ingrediente
+        if pi.ingrediente is not None
+    ]
+
+
+def _build_producto_response(producto: Producto) -> dict:
+    """Serializa un producto con sus ingredientes (incluyendo cantidad) y categorías."""
+    data = ProductoResponse.model_validate(producto).model_dump()
+    data["ingredientes"] = _serialize_ingredientes(producto)
+    return data
 
 
 class ProductoService:
@@ -26,7 +49,7 @@ class ProductoService:
             for p in productos:
                 _ = p.productos_categoria
                 _ = p.productos_ingrediente
-            items = [ProductoResponse.model_validate(p).model_dump() for p in productos]
+            items = [_build_producto_response(p) for p in productos]
             return total, items
 
     def get_by_id(self, producto_id: int) -> dict:
@@ -36,7 +59,7 @@ class ProductoService:
             p = repo.get_with_ingredientes(producto_id)
             if not p:
                 raise HTTPException(status_code=404, detail="Producto no encontrado")
-            return ProductoResponse.model_validate(p).model_dump()
+            return _build_producto_response(p)
 
     def create(self, data: ProductoCreate) -> dict:
         """Crea un producto nuevo con categorías e ingredientes."""
@@ -47,7 +70,6 @@ class ProductoService:
                 descripcion=data.descripcion,
                 precio_base=data.precio_base,
                 imagenes_url=data.imagenes_url,
-                stock_cantidad=data.stock_cantidad,
                 disponible=data.disponible,
                 unidad_venta_id=data.unidad_venta_id,
             ))
@@ -62,11 +84,15 @@ class ProductoService:
             if data.ingredientes:
                 for ing in data.ingredientes:
                     repo.add_ingrediente(p.id, ing.ingrediente_id, ing.cantidad)
+                # Recalcular stock basado en ingredientes
+                p.stock_cantidad = repo.get_available_stock(p.id)
+                p.disponible = p.stock_cantidad > 0
+                uow.session.add(p)
 
             uow.session.refresh(p)
             _ = p.productos_categoria
             _ = p.productos_ingrediente
-            return ProductoResponse.model_validate(p).model_dump()
+            return _build_producto_response(p)
 
     def update(self, producto_id: int, data: ProductoUpdate) -> dict:
         """Actualiza un producto existente."""
@@ -76,15 +102,17 @@ class ProductoService:
             if not p:
                 raise HTTPException(status_code=404, detail="Producto no encontrado")
             update_data = data.model_dump(exclude_unset=True)
+            # Ignorar stock_cantidad si se envía, ya que se calcula automáticamente
+            update_data.pop("stock_cantidad", None)
             for key, value in update_data.items():
                 setattr(p, key, value)
-            # Auto‑sync: si se actualiza stock, recalcular disponible siempre
-            if "stock_cantidad" in update_data:
-                p.disponible = p.stock_cantidad > 0
+            # Recalcular stock basado en ingredientes
+            p.stock_cantidad = repo.get_available_stock(producto_id)
+            p.disponible = p.stock_cantidad > 0
             uow.session.add(p)
             uow.session.flush()
             uow.session.refresh(p)
-            return ProductoResponse.model_validate(p).model_dump()
+            return _build_producto_response(p)
 
     def update_disponibilidad(self, producto_id: int, data: ProductoDisponibilidadUpdate) -> dict:
         """Actualiza disponibilidad y stock de un producto."""
@@ -102,7 +130,7 @@ class ProductoService:
             uow.session.add(p)
             uow.session.flush()
             uow.session.refresh(p)
-            return ProductoResponse.model_validate(p).model_dump()
+            return _build_producto_response(p)
 
     def update_imagenes(self, producto_id: int, imagenes_url: list[str]) -> dict:
         """Actualiza las imágenes de un producto."""
@@ -115,7 +143,7 @@ class ProductoService:
             uow.session.add(p)
             uow.session.flush()
             uow.session.refresh(p)
-            return ProductoResponse.model_validate(p).model_dump()
+            return _build_producto_response(p)
 
     def delete(self, producto_id: int) -> None:
         """Elimina (soft delete) un producto."""
@@ -127,7 +155,7 @@ class ProductoService:
             repo.soft_delete(p)
 
     def add_ingrediente(self, producto_id: int, data: AddIngredienteRequest) -> dict:
-        """Agrega un ingrediente a un producto."""
+        """Agrega un ingrediente a un producto y recalcula su stock."""
         with UnitOfWork() as uow:
             repo = ProductoRepository(uow.session)
             ing_repo = IngredienteRepository(uow.session)
@@ -137,19 +165,29 @@ class ProductoService:
             if not ing_repo.get_active_by_id(data.ingrediente_id):
                 raise HTTPException(status_code=404, detail="Ingrediente no encontrado")
             repo.add_ingrediente(producto_id, data.ingrediente_id, data.cantidad)
+            # Recalcular stock basado en ingredientes
+            p.stock_cantidad = repo.get_available_stock(producto_id)
+            p.disponible = p.stock_cantidad > 0
+            uow.session.add(p)
+            uow.session.flush()
             uow.session.refresh(p)
-            return ProductoResponse.model_validate(p).model_dump()
+            return _build_producto_response(p)
 
     def remove_ingrediente(self, producto_id: int, ingrediente_id: int) -> dict:
-        """Saca un ingrediente de un producto."""
+        """Saca un ingrediente de un producto y recalcula su stock."""
         with UnitOfWork() as uow:
             repo = ProductoRepository(uow.session)
             p = repo.get_active_by_id(producto_id)
             if not p:
                 raise HTTPException(status_code=404, detail="Producto no encontrado")
             repo.remove_ingrediente(producto_id, ingrediente_id)
+            # Recalcular stock basado en ingredientes
+            p.stock_cantidad = repo.get_available_stock(producto_id)
+            p.disponible = p.stock_cantidad > 0
+            uow.session.add(p)
+            uow.session.flush()
             uow.session.refresh(p)
-            return ProductoResponse.model_validate(p).model_dump()
+            return _build_producto_response(p)
 
     def assign_categoria(self, producto_id: int, data: AddCategoriaRequest) -> dict:
         """Asigna una categoría a un producto."""
@@ -163,7 +201,7 @@ class ProductoService:
                 raise HTTPException(status_code=404, detail="Categoria no encontrada")
             repo.assign_categoria(producto_id, data.categoria_id, data.es_principal)
             uow.session.refresh(p)
-            return ProductoResponse.model_validate(p).model_dump()
+            return _build_producto_response(p)
 
     def remove_categoria(self, producto_id: int, categoria_id: int) -> dict:
         """Saca una categoría de un producto."""
@@ -174,7 +212,7 @@ class ProductoService:
                 raise HTTPException(status_code=404, detail="Producto no encontrado")
             repo.remove_categoria(producto_id, categoria_id)
             uow.session.refresh(p)
-            return ProductoResponse.model_validate(p).model_dump()
+            return _build_producto_response(p)
 
 
 class IngredienteService:
@@ -205,6 +243,7 @@ class IngredienteService:
                     nombre=data.nombre,
                     descripcion=data.descripcion,
                     es_alergeno=data.es_alergeno,
+                    stock_cantidad=data.stock_cantidad,
                 ))
                 uow.session.refresh(ing)
             except IntegrityError:
@@ -215,13 +254,14 @@ class IngredienteService:
             return IngredienteResponse.model_validate(ing).model_dump()
 
     def update(self, ingrediente_id: int, data: IngredienteUpdate) -> dict:
-        """Actualiza un ingrediente existente."""
+        """Actualiza un ingrediente existente y recalcula stock de productos afectados."""
         with UnitOfWork() as uow:
             repo = IngredienteRepository(uow.session)
             ing = repo.get_active_by_id(ingrediente_id)
             if not ing:
                 raise HTTPException(status_code=404, detail="Ingrediente no encontrado")
             update_data = data.model_dump(exclude_unset=True)
+            stock_changed = "stock_cantidad" in update_data
             for key, value in update_data.items():
                 setattr(ing, key, value)
             uow.session.add(ing)
@@ -233,6 +273,16 @@ class IngredienteService:
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Ya existe un ingrediente con ese nombre."
                 )
+            # Si cambió el stock, recalcular stock de todos los productos que usan este ingrediente
+            if stock_changed:
+                prod_repo = ProductoRepository(uow.session)
+                productos = prod_repo.get_productos_by_ingrediente(ingrediente_id)
+                for p in productos:
+                    p.stock_cantidad = prod_repo.get_available_stock(p.id)
+                    p.disponible = p.stock_cantidad > 0
+                    uow.session.add(p)
+                if productos:
+                    uow.session.flush()
             return IngredienteResponse.model_validate(ing).model_dump()
 
     def delete(self, ingrediente_id: int) -> None:

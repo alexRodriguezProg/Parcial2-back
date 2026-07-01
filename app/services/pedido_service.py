@@ -5,6 +5,7 @@ from app.repositories import PedidoRepository, ProductoRepository, UnitOfWork
 from app.models import (
     Pedido, DetallePedido, HistorialEstadoPedido,
     EstadoPedidoCodigo, RolCodigo, FormaPago, Usuario,
+    Producto, ProductoIngrediente, Ingrediente,
 )
 from app.schemas.schemas import (
     CrearPedidoRequest, AvanzarEstadoRequest,
@@ -82,6 +83,9 @@ class PedidoService:
 
             detalles_data = []
             subtotal = 0.0
+            # Acumular descuento de ingredientes: {ingrediente_id: cantidad_total}
+            ingredientes_a_descontar: dict[int, float] = {}
+
             for item in data.items:
                 producto = producto_repo.get_active_by_id(item.producto_id)
                 if not producto:
@@ -90,6 +94,28 @@ class PedidoService:
                     raise HTTPException(status_code=400, detail=f"'{producto.nombre}' no está disponible")
                 if producto.stock_cantidad < item.cantidad:
                     raise HTTPException(status_code=400, detail=f"Stock insuficiente para '{producto.nombre}'")
+
+                # Validar stock de ingredientes para este producto
+                _ = producto.productos_ingrediente
+                for pi in producto.productos_ingrediente:
+                    if pi.ingrediente is None:
+                        continue
+                    necesidad = pi.cantidad * item.cantidad
+                    ingrediente = pi.ingrediente
+                    stock_actual = ingrediente.stock_cantidad + ingredientes_a_descontar.get(ingrediente.id, 0)
+                    # Acumular lo que ya se va a descontar de otros items
+                    ingredientes_a_descontar[ingrediente.id] = (
+                        ingredientes_a_descontar.get(ingrediente.id, 0) + necesidad
+                    )
+                    # Verificar stock considerando lo ya acumulado
+                    total_necesario = ingredientes_a_descontar[ingrediente.id]
+                    if ingrediente.stock_cantidad < total_necesario:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Stock insuficiente de ingrediente '{ingrediente.nombre}' "
+                                   f"para '{producto.nombre}' (necesario: {total_necesario}, "
+                                   f"disponible: {ingrediente.stock_cantidad})",
+                        )
 
                 item_subtotal = producto.precio_base * item.cantidad
                 subtotal += item_subtotal
@@ -104,6 +130,13 @@ class PedidoService:
                 producto.stock_cantidad -= item.cantidad
                 producto.disponible = producto.stock_cantidad > 0
                 uow.session.add(producto)
+
+            # Descontar stock de ingredientes
+            for ingrediente_id, cantidad_total in ingredientes_a_descontar.items():
+                ingrediente = uow.session.get(Ingrediente, ingrediente_id)
+                if ingrediente:
+                    ingrediente.stock_cantidad -= cantidad_total
+                    uow.session.add(ingrediente)
 
             descuento   = 0.0
             costo_envio = 0.0  # Sin lógica de envío implementada aún
@@ -199,6 +232,25 @@ class PedidoService:
             pedido.updated_at      = datetime.utcnow()
             uow.session.add(pedido)
             uow.session.flush()
+
+            # Si se cancela, restaurar stock de producto e ingredientes
+            if nuevo_estado == EstadoPedidoCodigo.CANCELADO:
+                for detalle in pedido.detalles:
+                    producto = uow.session.get(Producto, detalle.producto_id)
+                    if producto:
+                        producto.stock_cantidad += detalle.cantidad
+                        producto.disponible = True
+                        uow.session.add(producto)
+
+                        # Restaurar stock de ingredientes
+                        _ = producto.productos_ingrediente
+                        for pi in producto.productos_ingrediente:
+                            if pi.ingrediente is None:
+                                continue
+                            ingrediente = uow.session.get(Ingrediente, pi.ingrediente_id)
+                            if ingrediente:
+                                ingrediente.stock_cantidad += pi.cantidad * detalle.cantidad
+                                uow.session.add(ingrediente)
 
             # RN-03: append-only
             repo.append_historial(HistorialEstadoPedido(

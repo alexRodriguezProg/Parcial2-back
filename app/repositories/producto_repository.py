@@ -9,6 +9,33 @@ class ProductoRepository(BaseRepository[Producto]):
     def __init__(self, session: Session):
         super().__init__(Producto, session)
 
+    def get_available_stock(self, producto_id: int) -> int:
+        """Calcula el stock máximo disponible de un producto basado en sus ingredientes.
+        
+        Retorna el mínimo entre (stock_ingrediente / cantidad_requerida) para cada ingrediente.
+        Si no tiene ingredientes, retorna el stock_cantidad del producto.
+        """
+        producto = self.get_active_by_id(producto_id)
+        if not producto:
+            return 0
+        
+        ingredientes = self.session.exec(
+            select(ProductoIngrediente, Ingrediente)
+            .join(Ingrediente, ProductoIngrediente.ingrediente_id == Ingrediente.id)
+            .where(ProductoIngrediente.producto_id == producto_id)
+        ).all()
+        
+        if not ingredientes:
+            return int(producto.stock_cantidad) if producto.stock_cantidad else 0
+        
+        max_stock = float('inf')
+        for pi, ingrediente in ingredientes:
+            if pi.cantidad and pi.cantidad > 0:
+                stock_disponible = int(ingrediente.stock_cantidad // pi.cantidad)
+                max_stock = min(max_stock, stock_disponible)
+        
+        return int(max_stock) if max_stock != float('inf') else 0
+
     def get_all_with_filters(self, skip=0, limit=20, categoria_id=None, disponible=None, search=None) -> tuple:
         """Devuelve productos con filtros opcionales y paginación."""
         statement = select(Producto).where(Producto.deleted_at == None)
@@ -38,7 +65,7 @@ class ProductoRepository(BaseRepository[Producto]):
             _ = producto.productos_ingrediente
         return producto
 
-    def add_ingrediente(self, producto_id: int, ingrediente_id: int, cantidad=None) -> None:
+    def add_ingrediente(self, producto_id: int, ingrediente_id: int, cantidad: float) -> None:
         """Asocia un ingrediente a un producto."""
         existing = self.session.exec(
             select(ProductoIngrediente).where(
@@ -52,7 +79,7 @@ class ProductoRepository(BaseRepository[Producto]):
                 producto_id=producto_id,
                 ingrediente_id=ingrediente_id,
                 unidad_medida_id=unidad.id if unidad else 1,
-                cantidad=float(cantidad) if cantidad else 1.0,
+                cantidad=cantidad,
                 es_removible=False,
             ))
             self.session.flush()
@@ -96,6 +123,18 @@ class ProductoRepository(BaseRepository[Producto]):
         if existing:
             self.session.delete(existing)
             self.session.flush()
+
+    def get_productos_by_ingrediente(self, ingrediente_id: int) -> List[Producto]:
+        """Devuelve todos los productos que usan un ingrediente específico."""
+        statement = (
+            select(Producto)
+            .join(ProductoIngrediente, ProductoIngrediente.producto_id == Producto.id)
+            .where(
+                ProductoIngrediente.ingrediente_id == ingrediente_id,
+                Producto.deleted_at == None,
+            )
+        )
+        return list(self.session.exec(statement).all())
 
 
 class IngredienteRepository(BaseRepository[Ingrediente]):

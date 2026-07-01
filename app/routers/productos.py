@@ -1,11 +1,14 @@
 from typing import Annotated, Optional
 from fastapi import APIRouter, Query, status
 from pydantic import BaseModel
+from sqlmodel import select, Session
 from app.schemas.schemas import (
     ProductoCreate, ProductoUpdate, ProductoDisponibilidadUpdate, ProductoResponse,
     IngredienteCreate, IngredienteUpdate, IngredienteResponse, AddIngredienteRequest,
-    AddCategoriaRequest,
+    AddCategoriaRequest, UnidadMedidaResponse,
 )
+from app.models import UnidadMedida
+from app.core.database import engine
 
 class ImagenesUpdate(BaseModel):
     imagenes_url: list[str]
@@ -14,6 +17,7 @@ from app.core.dependencies import AdminUser, AdminOrStock
 
 ingredientes_router = APIRouter(prefix="/api/v1/ingredientes", tags=["ingredientes"])
 productos_router = APIRouter(prefix="/api/v1/productos", tags=["productos"])
+unidades_router = APIRouter(prefix="/api/v1/unidades-medida", tags=["unidades-medida"])
 
 producto_service = ProductoService()
 ingrediente_service = IngredienteService()
@@ -126,3 +130,21 @@ def assign_categoria(producto_id: int, data: AddCategoriaRequest, _: AdminUser):
 def remove_categoria(producto_id: int, categoria_id: int, _: AdminUser):
     """DELETE /productos/{id}/categorias/{id} — Remueve una categoría de un producto."""
     return producto_service.remove_categoria(producto_id, categoria_id)
+
+
+@productos_router.get("/{producto_id}/stock-disponible")
+def get_stock_disponible(producto_id: int):
+    """GET /productos/{id}/stock-disponible — Calcula el stock máximo disponible basado en ingredientes."""
+    with Session(engine) as session:
+        from app.repositories.producto_repository import ProductoRepository
+        repo = ProductoRepository(session)
+        stock = repo.get_available_stock(producto_id)
+        return {"producto_id": producto_id, "stock_disponible": stock}
+
+
+@unidades_router.get("/", response_model=list[UnidadMedidaResponse])
+def list_unidades_medida():
+    """GET /unidades-medida — Lista todas las unidades de medida."""
+    with Session(engine) as session:
+        unidades = session.exec(select(UnidadMedida)).all()
+        return [UnidadMedidaResponse.model_validate(u) for u in unidades]

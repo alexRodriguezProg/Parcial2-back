@@ -10,22 +10,19 @@ class EstadisticaService:
         with UnitOfWork() as uow:
             session = uow.session
             hoy = date.today()
+            mes_actual = f"{hoy.year}-{hoy.month:02d}"
 
             ventas_hoy = session.exec(text("""
                 SELECT COALESCE(SUM(p.total), 0)
                 FROM pedido p
-                JOIN pago pa ON pa.pedido_id = p.id
-                WHERE p.estado_codigo != 'CANCELADO'
-                  AND pa.mp_status = 'approved'
+                WHERE p.estado_codigo NOT IN ('CANCELADO', 'PENDIENTE')
                   AND DATE(p.created_at) = :hoy
             """).bindparams(hoy=hoy)).scalar() or 0
 
             ticket_promedio = session.exec(text("""
                 SELECT COALESCE(AVG(p.total), 0)
                 FROM pedido p
-                JOIN pago pa ON pa.pedido_id = p.id
-                WHERE p.estado_codigo != 'CANCELADO'
-                  AND pa.mp_status = 'approved'
+                WHERE p.estado_codigo NOT IN ('CANCELADO', 'PENDIENTE')
             """)).scalar() or 0
 
             pedidos_activos = session.exec(text("""
@@ -38,11 +35,9 @@ class EstadisticaService:
             ingresos_mes = session.exec(text("""
                 SELECT COALESCE(SUM(p.total), 0)
                 FROM pedido p
-                JOIN pago pa ON pa.pedido_id = p.id
-                WHERE p.estado_codigo != 'CANCELADO'
-                  AND pa.mp_status = 'approved'
-                  AND strftime('%Y-%m', p.created_at) = strftime('%Y-%m', 'now')
-            """)).scalar() or 0
+                WHERE p.estado_codigo NOT IN ('CANCELADO', 'PENDIENTE')
+                  AND to_char(p.created_at, 'YYYY-MM') = :mes_actual
+            """).bindparams(mes_actual=mes_actual)).scalar() or 0
 
             return {
                 "ventas_hoy":      round(float(ventas_hoy), 2),
@@ -63,9 +58,7 @@ class EstadisticaService:
                     COUNT(p.id)               AS cantidad_pedidos,
                     COALESCE(SUM(p.total), 0) AS total_ventas
                 FROM pedido p
-                JOIN pago pa ON pa.pedido_id = p.id
-                WHERE p.estado_codigo != 'CANCELADO'
-                  AND pa.mp_status = 'approved'
+                WHERE p.estado_codigo NOT IN ('CANCELADO', 'PENDIENTE')
                   AND DATE(p.created_at) BETWEEN :desde AND :hasta
                 GROUP BY DATE(p.created_at)
                 ORDER BY DATE(p.created_at) ASC
@@ -130,9 +123,7 @@ class EstadisticaService:
                     COUNT(p.id)               AS cantidad,
                     COALESCE(SUM(p.total), 0) AS total
                 FROM pedido p
-                JOIN pago pa ON pa.pedido_id = p.id
-                WHERE p.estado_codigo != 'CANCELADO'
-                  AND pa.mp_status = 'approved'
+                WHERE p.estado_codigo NOT IN ('CANCELADO', 'PENDIENTE')
                   AND DATE(p.created_at) BETWEEN :desde AND :hasta
                 GROUP BY p.forma_pago_codigo
                 ORDER BY total DESC

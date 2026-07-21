@@ -40,7 +40,7 @@ def seed_estados(session: Session):
 def seed_formas_pago(session: Session):
     for data in [
         {"codigo": FormaPagoCodigo.MERCADOPAGO,   "descripcion": "Checkout API · CardPayment SDK", "habilitado": True},
-        {"codigo": FormaPagoCodigo.EFECTIVO,      "descripcion": "Retiro en local",                "habilitado": True},
+        {"codigo": FormaPagoCodigo.EFECTIVO,      "descripcion": "Efectivo",                        "habilitado": True},
         {"codigo": FormaPagoCodigo.TRANSFERENCIA, "descripcion": "Transferencia bancaria",         "habilitado": True},
     ]:
         if not session.exec(select(FormaPago).where(FormaPago.codigo == data["codigo"])).first():
